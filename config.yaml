@@ -1,0 +1,41 @@
+# options-screener configuration (v1)
+# Strategy: cash-secured put selling on liquid underlyings.
+
+watchlist:
+  # Liquid, optionable stocks/ETFs. Edit freely.
+  - SPY
+  - QQQ
+  - DIA
+  - IWM
+  - AAPL
+  - MSFT
+  - NVDA
+  - AMD
+  - TSLA
+  - META
+  - AMZN
+  - GOOGL
+  - JPM
+  - XOM
+  - NFLX
+
+strategy:
+  dte_min: 30          # minimum days to expiration for the short put
+  dte_max: 45          # maximum days to expiration for the short put
+  target_delta: -0.30  # cash-secured put target delta
+  delta_tolerance: 0.07
+  min_premium_pct: 0.01  # premium (mid) must be >= 1% of strike
+
+liquidity:
+  min_open_interest: 500
+  min_volume: 100
+  max_spread_pct: 0.10   # (ask - bid) / mid must be <= 10%
+
+# Assumption: constant risk-free rate used for delta estimation.
+# Documented openly; v2 can pull the live T-bill rate.
+risk_free_rate: 0.04
+
+exits:
+  profit_target_pct: 0.50   # close at 50% of max profit
+  manage_dte: 21            # exit or roll at 21 DTE
+  loss_manage_multiple: 2.0 # manage the trade if loss reaches 2x premium received

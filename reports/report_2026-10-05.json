@@ -1,0 +1,82 @@
+{
+  "as_of": "2026-10-05",
+  "strategy": "cash-secured put (~30 delta, 30-45 DTE)",
+  "data_source": "yfinance (unofficial, delayed ~15 min)",
+  "config": {
+    "dte_band": [
+      30,
+      45
+    ],
+    "target_delta": -0.3,
+    "liquidity": {
+      "min_open_interest": 500,
+      "min_volume": 100,
+      "max_spread_pct": 0.1
+    }
+  },
+  "disclaimer": "Disclaimer: this report is for education and research only \u2014 not financial advice. Options involve substantial risk of loss, including the loss of the entire premium and, for cash-secured puts, assignment risk on the underlying. Paper-trade any signal before risking capital. No returns are guaranteed. Quotes are delayed and indicative; verify with your broker before acting.",
+  "signals": [],
+  "skipped": [
+    {
+      "ticker": "SPY",
+      "reason": "2026-11-13 (39 DTE): $500: open interest 1 < 500; $530: open interest 3 < 500; $535: open interest 1 < 500"
+    },
+    {
+      "ticker": "QQQ",
+      "reason": "2026-11-13 (39 DTE): $480: open interest 21 < 500; $485: open interest 14 < 500; $490: open interest 33 < 500"
+    },
+    {
+      "ticker": "DIA",
+      "reason": "2026-11-13 (39 DTE): $450: open interest 2 < 500; $455: open interest 1 < 500; $460: open interest 4 < 500"
+    },
+    {
+      "ticker": "IWM",
+      "reason": "2026-11-13 (39 DTE): $220: open interest 1 < 500; $235: open interest 1 < 500; $240: open interest 1 < 500"
+    },
+    {
+      "ticker": "AAPL",
+      "reason": "2026-11-13 (39 DTE): $210: open interest 1 < 500; $215: open interest 2 < 500; $220: open interest 2 < 500"
+    },
+    {
+      "ticker": "MSFT",
+      "reason": "2026-11-13 (39 DTE): $400: open interest 19 < 500; $410: open interest 5 < 500; $415: open interest 1 < 500"
+    },
+    {
+      "ticker": "NVDA",
+      "reason": "2026-11-13 (39 DTE): $125: open interest 2 < 500; $145: open interest 2 < 500; $150: open interest 4 < 500"
+    },
+    {
+      "ticker": "AMD",
+      "reason": "2026-11-13 (39 DTE): $200: open interest 1 < 500; $210: open interest 4 < 500; $220: open interest 1 < 500"
+    },
+    {
+      "ticker": "TSLA",
+      "reason": "2026-11-13 (39 DTE): $170: open interest 15 < 500; $180: open interest 25 < 500; $190: open interest 6 < 500"
+    },
+    {
+      "ticker": "META",
+      "reason": "2026-11-13 (39 DTE): $430: open interest 2 < 500; $525: open interest 2 < 500; $550: open interest 4 < 500"
+    },
+    {
+      "ticker": "AMZN",
+      "reason": "2026-11-13 (39 DTE): $180: open interest 1 < 500; $185: open interest 3 < 500; $190: open interest 1 < 500"
+    },
+    {
+      "ticker": "GOOGL",
+      "reason": "2026-11-13 (39 DTE): $185: open interest 10 < 500; $190: open interest 1 < 500; $195: open interest 28 < 500"
+    },
+    {
+      "ticker": "JPM",
+      "reason": "2026-11-13 (39 DTE): $280: open interest 20 < 500; $290: open interest 20 < 500; $305: open interest 1 < 500"
+    },
+    {
+      "ticker": "XOM",
+      "reason": "2026-11-13 (39 DTE): $145: open interest 4 < 500; $150: volume 2 < 100; $152: open interest 47 < 500"
+    },
+    {
+      "ticker": "NFLX",
+      "reason": "2026-11-13 (39 DTE): $40: open interest 2 < 500; $45: open interest 13 < 500; $50: open interest 11 < 500"
+    }
+  ],
+  "errors": []
+}
