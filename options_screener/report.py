@@ -14,17 +14,23 @@ DISCLAIMER = (
 
 def build_report_payload(results: dict, cfg: dict, as_of: str | None = None) -> dict:
     """Assemble the JSON-serializable report payload."""
+    spread_cfg = cfg.get("spread", {})
     return {
         "as_of": as_of or date.today().isoformat(),
-        "strategy": "cash-secured put (~30 delta, 30-45 DTE)",
+        "strategy": ("cash-secured puts + bull put spreads "
+                     "(~30 delta short leg, 30-45 DTE)"),
         "data_source": "yfinance (unofficial, delayed ~15 min)",
         "config": {
             "dte_band": [cfg["strategy"]["dte_min"], cfg["strategy"]["dte_max"]],
             "target_delta": cfg["strategy"]["target_delta"],
             "liquidity": cfg["liquidity"],
+            "spread": {k: spread_cfg.get(k) for k in
+                       ("enabled", "min_width_pct", "max_width_pct",
+                        "min_credit_fraction")} if spread_cfg else None,
         },
         "disclaimer": DISCLAIMER,
         "signals": results["signals"],
+        "spreads": results.get("spreads", []),
         "skipped": results["skipped"],
         "errors": results["errors"],
     }
@@ -67,6 +73,34 @@ def render_markdown(payload: dict) -> str:
                          f"{e['profit_target']}; {e['time_exit']}; {e['loss_manage']}.")
         lines.append("")
 
+    spreads = payload.get("spreads", [])
+    if spreads:
+        lines.append(f"## Bull put spreads ({len(spreads)}) — defined risk")
+        lines.append("")
+        lines.append("Short leg = the CSP candidate above; long leg = a cheaper "
+                     "put on the same expiry, capping max loss at "
+                     "(width − credit).")
+        lines.append("")
+        lines.append("| Ticker | Short/Long | Width | Net credit | Max loss | ROI | "
+                     "Ann. ROI | Breakeven | Expiry | DTE |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|")
+        for sp in spreads:
+            anny = f"{sp['annualized_roi']:.1%}" if sp["annualized_roi"] is not None else "n/a"
+            lines.append(
+                f"| {sp['ticker']} | ${sp['short_strike']:.2f}/${sp['long_strike']:.2f} | "
+                f"${sp['width']:.2f} | ${sp['net_credit']:.2f} | "
+                f"${sp['max_loss']:.2f} | {sp['roi']:.1%} | {anny} | "
+                f"${sp['breakeven']:.2f} | {sp['expiry']} | {sp['dte']} |")
+        lines.append("")
+        lines.append("## Exit plan (per spread)")
+        lines.append("")
+        for sp in spreads:
+            e = sp["exit_plan"]
+            lines.append(f"- **{sp['ticker']} ${sp['short_strike']:.0f}/"
+                         f"${sp['long_strike']:.0f} {sp['expiry']}**: "
+                         f"{e['profit_target']}; {e['time_exit']}; {e['loss_manage']}.")
+        lines.append("")
+
     if payload["skipped"]:
         lines.append("## No signal (why)")
         lines.append("")
@@ -87,6 +121,10 @@ def render_markdown(payload: dict) -> str:
         "- IV-vs-HV rank is a proxy: current contract IV positioned inside the "
         "ticker's 1-year realized-vol range. True IV rank needs a historical-IV "
         "feed (planned for v2).",
+        "- Bull put spreads: the short leg is the CSP candidate from the table "
+        "above; the long leg is the cheaper same-expiry put, 2–6% of the short "
+        "strike lower, that maximizes return on risk while passing liquidity "
+        "filters and collecting at least 1/3 of the spread width in credit.",
         "- Deltas are Black-Scholes estimates using a fixed risk-free rate "
         "assumption; broker greeks may differ slightly.",
         "- Signals are candidates for *research*, not orders. Nothing here "

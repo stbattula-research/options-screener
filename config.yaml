@@ -31,6 +31,16 @@ liquidity:
   min_volume: 100
   max_spread_pct: 0.10   # (ask - bid) / mid must be <= 10%
 
+# v2: bull put spreads built over the CSP candidates (defined risk).
+# Short leg = the ~30-delta CSP candidate; long leg = a cheaper put on the
+# same expiry. Entry: long strike 2-6% of the short strike below it, passing
+# the same liquidity filters, collecting at least 1/3 of the width in credit.
+spread:
+  enabled: true
+  min_width_pct: 0.02
+  max_width_pct: 0.06
+  min_credit_fraction: 0.33
+
 # Assumption: constant risk-free rate used for delta estimation.
 # Documented openly; v2 can pull the live T-bill rate.
 risk_free_rate: 0.04

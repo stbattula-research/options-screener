@@ -28,8 +28,13 @@ For each ticker in the watchlist (`config.yaml`):
    volume, maximum bid-ask spread width.
 5. Keeps strikes near **−0.30 delta** with premium ≥ 1% of strike, ranked by
    annualized yield.
-6. Attaches a mechanical **exit plan**: close at 50% of max profit, exit/roll
-   at 21 DTE, manage at 2× premium loss.
+6. Builds **bull put spreads** (v2): for each CSP candidate, pairs it with a
+   cheaper same-expiry long put 2–6% of the short strike lower, passing the
+   same liquidity filters and collecting ≥ 1/3 of the spread width in credit.
+   Max loss is capped at (width − credit); spreads are ranked by return on
+   risk. This is the defined-risk version of the same trade.
+7. Attaches a mechanical **exit plan** to every signal and spread: close at
+   50% of max profit, exit/roll at 21 DTE, manage at 2× premium/credit.
 
 ## Quickstart
 
@@ -72,8 +77,8 @@ rate assumption, and the exit rules. Edit it, re-run, done.
 
 ## Roadmap
 
-- v2: true IV rank via historical-IV feed, backtesting on historical chains,
-  bull-put-spread signals.
+- v2: ✅ bull-put-spread signals (shipped 2026-10-10); remaining: true IV
+  rank via historical-IV feed, backtesting on historical chains.
 - v3: alerting (email/webhook) on new signals.
 - Later, only with explicit approval at each stage: paper-trading broker
   integration. **Live auto-trading is never in scope without the owner's
