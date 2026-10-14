@@ -1,1 +1,121 @@
-IyBvcHRpb25zLXNjcmVlbmVyCgpBIGRhaWx5IHNpZ25hbCBzY3JlZW5lciBmb3IgKip3ZWVrbHkgb3B0aW9ucyBwcmVtaXVtIHNlbGxpbmcqKiDigJQgcmVzZWFyY2ggb25seS4KRWFjaCBydW4gc2NhbnMgYSB3YXRjaGxpc3Qgb2YgbGlxdWlkLCBvcHRpb25hYmxlIHN0b2Nrcy9FVEZzLCBwdWxscyBwdXQgY2hhaW5zLAphbmQgZW1pdHMgY29uY3JldGUgY2FzaC1zZWN1cmVkLXB1dCBjYW5kaWRhdGVzOiAqKn4zMCBkZWx0YSwgMzDigJM0NSBEVEUqKiwKcGFzc2luZyBsaXF1aWRpdHkgZmlsdGVycywgd2l0aCBtZWNoYW5pY2FsIGV4aXQgcnVsZXMuIE91dHB1dCBpcyBhIHJlYWRhYmxlCk1hcmtkb3duIHJlcG9ydCBwbHVzIG1hY2hpbmUtcmVhZGFibGUgSlNPTi4KCj4g4pqg77iPICoqUmlzayBkaXNjbGFpbWVyIOKAlCByZWFkIGZpcnN0LioqIFRoaXMgaXMgYW4gZWR1Y2F0aW9uYWwgcmVzZWFyY2ggdG9vbCwKPiAqKm5vdCBmaW5hbmNpYWwgYWR2aWNlKiouIE9wdGlvbnMgaW52b2x2ZSBzdWJzdGFudGlhbCByaXNrIG9mIGxvc3MsIGluY2x1ZGluZwo+IGxvc2luZyB0aGUgZW50aXJlIHByZW1pdW0gYW5kLCBmb3IgY2FzaC1zZWN1cmVkIHB1dHMsIGJlaW5nIGFzc2lnbmVkIHRoZQo+IHVuZGVybHlpbmcgYXQgdGhlIHN0cmlrZSBwcmljZS4gUGFwZXItdHJhZGUgZXZlcnkgc2lnbmFsIGJlZm9yZSByaXNraW5nIHJlYWwKPiBjYXBpdGFsLiBObyByZXR1cm5zIGFyZSBndWFyYW50ZWVkLiBOb3RoaW5nIGluIHRoaXMgcmVwbyBwbGFjZXMgdHJhZGVzLAo+IGNvbm5lY3RzIHRvIGEgYnJva2VyLCBvciBzaG91bGQgYmUgaW50ZXJwcmV0ZWQgYXMgYSByZWNvbW1lbmRhdGlvbiB0byBidXkgb3IKPiBzZWxsIGFueSBzZWN1cml0eS4KCiMjIFdoYXQgaXQgZG9lcwoKRm9yIGVhY2ggdGlja2VyIGluIHRoZSB3YXRjaGxpc3QgKGBjb25maWcueWFtbGApOgoKMS4gRmV0Y2hlcyAxIHllYXIgb2YgcHJpY2UgaGlzdG9yeSBhbmQgdGhlIHB1dCBjaGFpbiBmb3IgdGhlIGV4cGlyYXRpb24KICAgY2xvc2VzdCB0byB0aGUgbWlkZGxlIG9mIHRoZSAzMOKAkzQ1IERURSBiYW5kLgoyLiBFc3RpbWF0ZXMgcHV0IGRlbHRhcyB3aXRoIEJsYWNrLVNjaG9sZXMgKGZpeGVkIHJpc2stZnJlZS1yYXRlIGFzc3VtcHRpb24pLgozLiBDb21wdXRlcyBhbiAqKklWLXZzLUhWIGdhdWdlKio6IGN1cnJlbnQgY29udHJhY3QgSVYgcG9zaXRpb25lZCBpbnNpZGUgdGhlCiAgIHRpY2tlcidzIDEteWVhciByZWFsaXplZC12b2xhdGlsaXR5IHJhbmdlLiBUaGlzIGlzIGEgKnByb3h5Kiwgbm90IGEgdHJ1ZSBJVgogICByYW5rIChzZWUgW2RhdGEgbGltaXRhdGlvbnNdKCNkYXRhLWxpbWl0YXRpb25zKSkuCjQuIEFwcGxpZXMgKipsaXF1aWRpdHkgZmlsdGVycyoqOiBtaW5pbXVtIG9wZW4gaW50ZXJlc3QsIG1pbmltdW0gZGFpbHkgb3B0aW9uCiAgIHZvbHVtZSwgbWF4aW11bSBiaWQtYXNrIHNwcmVhZCB3aWR0aC4KNS4gS2VlcHMgc3RyaWtlcyBuZWFyICoq4oiSMC4zMCBkZWx0YSoqIHdpdGggcHJlbWl1bSDiiaUgMSUgb2Ygc3RyaWtlLCByYW5rZWQgYnkKICAgYW5udWFsaXplZCB5aWVsZC4KNi4gQnVpbGRzICoqYnVsbCBwdXQgc3ByZWFkcyoqICh2Mik6IGZvciBlYWNoIENTUCBjYW5kaWRhdGUsIHBhaXJzIGl0IHdpdGggYQogICBjaGVhcGVyIHNhbWUtZXhwaXJ5IGxvbmcgcHV0IDLigJM2JSBvZiB0aGUgc2hvcnQgc3RyaWtlIGxvd2VyLCBwYXNzaW5nIHRoZQogICBzYW1lIGxpcXVpZGl0eSBmaWx0ZXJzIGFuZCBjb2xsZWN0aW5nIOKJpSAxLzMgb2YgdGhlIHNwcmVhZCB3aWR0aCBpbiBjcmVkaXQuCiAgIE1heCBsb3NzIGlzIGNhcHBlZCBhdCAod2lkdGgg4oiSIGNyZWRpdCk7IHNwcmVhZHMgYXJlIHJhbmtlZCBieSByZXR1cm4gb24KICAgcmlzay4gVGhpcyBpcyB0aGUgZGVmaW5lZC1yaXNrIHZlcnNpb24gb2YgdGhlIHNhbWUgdHJhZGUuCjcuIEF0dGFjaGVzIGEgbWVjaGFuaWNhbCAqKmV4aXQgcGxhbioqIHRvIGV2ZXJ5IHNpZ25hbCBhbmQgc3ByZWFkOiBjbG9zZSBhdAogICA1MCUgb2YgbWF4IHByb2ZpdCwgZXhpdC9yb2xsIGF0IDIxIERURSwgbWFuYWdlIGF0IDLDlyBwcmVtaXVtL2NyZWRpdC4KCiMjIFF1aWNrc3RhcnQKCmBgYGJhc2gKcHl0aG9uIC1tIHZlbnYgLnZlbnYgJiYgc291cmNlIC52ZW52L2Jpbi9hY3RpdmF0ZQpwaXAgaW5zdGFsbCAtciByZXF1aXJlbWVudHMudHh0CnB5dGhvbiBzY3JlZW5lci5weQojIHdyaXRlcyByZXBvcnRzL3JlcG9ydF9ZWVlZLU1NLURELm1kIGFuZCAuanNvbgpgYGAKClJ1biB3aXRoIGEgY3VzdG9tIGNvbmZpZyBvciBvdXRwdXQgZGlyOgoKYGBgYmFzaApweXRob24gc2NyZWVuZXIucHkgLS1jb25maWcgY29uZmlnLnlhbWwgLS1vdXQtZGlyIHJlcG9ydHMvCmBgYAoKUnVuIHRoZSB0ZXN0cyAobm8gbmV0d29yayBuZWVkZWQpOgoKYGBgYmFzaApweXRlc3QgLXEKYGBgCgojIyBCYWNrdGVzdGluZyB0aGUgc3RyYXRlZ3kKCmBiYWNrdGVzdC5weWAgc2ltdWxhdGVzIHRoZSBDU1Agc3RyYXRlZ3kgb3ZlciBoaXN0b3JpY2FsIGRhaWx5IGNsb3NlcyBhbmQKd3JpdGVzIGEgTWFya2Rvd24gKyBKU09OIHJlcG9ydCAodHJhZGUgbG9nLCB3aW4gcmF0ZSwgUCZMIHBlciBjb250cmFjdCwKbWF4IGRyYXdkb3duLCBleGl0IGJyZWFrZG93bik6CgpgYGBiYXNoCnB5dGhvbiBiYWNrdGVzdC5weSAtLXRpY2tlciBTUFkgLS15ZWFycyAyCnB5dGhvbiBiYWNrdGVzdC5weSAtLWFsbCAtLXllYXJzIDUgICAjIHdob2xlIHdhdGNobGlzdAojIHdyaXRlcyByZXBvcnRzL2JhY2t0ZXN0X1lZWVktTU0tREQubWQgYW5kIC5qc29uCmBgYAoKSG93IGl0IHdvcmtzOiBldmVyeSA1IHRyYWRpbmcgZGF5cyBpdCBzZWxscyBhIH4zMC1kZWx0YSBwdXQgKDM1IERURSBieQpkZWZhdWx0LCBgYmFja3Rlc3QuZW50cnlfZHRlYCBpbiBgY29uZmlnLnlhbWxgKSwgcHJpY2VzIHByZW1pdW1zIHdpdGgKQmxhY2stU2Nob2xlcyBhZ2FpbnN0IGFuIElWIHByb3h5ICh0cmFpbGluZyAyMC1kYXkgcmVhbGl6ZWQgdm9sIMOXIDEuMTUpLAphbmQgYXBwbGllcyB0aGUgc2FtZSBleGl0IHJ1bGVzIGFzIHRoZSBzY3JlZW5lciAoNTAlIG9mIG1heCBwcm9maXQsCjIxLURURSBtYW5hZ2VtZW50LCAyw5ctcHJlbWl1bSBsb3NzIG1hbmFnZW1lbnQpLgoKPiDimqDvuI8gKipNb2RlbC1iYXNlZCwgbm90IGhpc3RvcmljYWwtY2hhaW4gZGF0YS4qKiBObyBmcmVlIHNvdXJjZSBwdWJsaXNoZXMKPiBoaXN0b3JpY2FsIG9wdGlvbiBjaGFpbnMsIHNvIHByZW1pdW1zIGFyZSAqc2ltdWxhdGVkKiwgbm90IG9ic2VydmVkLiBJViBpcwo+IGhlbGQgY29uc3RhbnQgcGVyIHRyYWRlLCB0aGVyZSBhcmUgbm8gY29tbWlzc2lvbnMgb3Igc2xpcHBhZ2UsIGFuZCBmaWxscwo+IGFyZSBhdCBtb2RlbCBtaWQuIFRyZWF0IHJlc3VsdHMgYXMgaWxsdXN0cmF0aXZlIHJlc2VhcmNoIOKAlCBhIHNhbml0eSBjaGVjawo+IG9uIHRoZSBtZWNoYW5pY3MsIG5ldmVyIGFzIGV4cGVjdGVkIHJldHVybnMuCgojIyBDb25maWd1cmF0aW9uCgpFdmVyeXRoaW5nIHR1bmFibGUgbGl2ZXMgaW4gYGNvbmZpZy55YW1sYDogdGhlIHdhdGNobGlzdCwgdGhlIERURSBiYW5kLApkZWx0YSB0YXJnZXQvdG9sZXJhbmNlLCBtaW5pbXVtIHByZW1pdW0sIGxpcXVpZGl0eSB0aHJlc2hvbGRzLCB0aGUgcmlzay1mcmVlCnJhdGUgYXNzdW1wdGlvbiwgYW5kIHRoZSBleGl0IHJ1bGVzLiBFZGl0IGl0LCByZS1ydW4sIGRvbmUuCgojIyBEYXRhIGxpbWl0YXRpb25zCgotIFF1b3RlcyBjb21lIGZyb20gKip5ZmluYW5jZSoqLCBhbiB1bm9mZmljaWFsIFlhaG9vIEZpbmFuY2UgQVBJOiBkZWxheWVkCiAgfjE1IG1pbnV0ZXMsIGFuZCB0aGUgZW5kcG9pbnQgY2FuIGNoYW5nZSBvciBicmVhayB3aXRob3V0IG5vdGljZS4gVGhlCiAgc2NyZWVuZXIgc3VyZmFjZXMgZmV0Y2ggZmFpbHVyZXMgaW5zdGVhZCBvZiBzaWxlbnRseSB1c2luZyBzdGFsZSBkYXRhLgotICoqTm8gdHJ1ZSBJViByYW5rIGluIHYxLioqIEZyZWUgc291cmNlcyBkb24ndCBwcm92aWRlIGEgaGlzdG9yaWNhbCBJVgogIHNlcmllcywgc28gdGhlIHJlcG9ydCBzaG93cyBJViBwb3NpdGlvbmVkIGFnYWluc3QgdGhlIDEteWVhciByZWFsaXplZC12b2wKICByYW5nZSBhbmQgbGFiZWxzIGl0IGhvbmVzdGx5LiBBIHRydWUgSVYgcmFuayAoY3VycmVudCBJViB2cyA1Mi13ZWVrIElWCiAgcmFuZ2UpIGlzIHBsYW5uZWQgZm9yIHYyIHdpdGggYSBwYWlkIGhpc3RvcmljYWwtSVYgZmVlZC4KLSBEZWx0YXMgYXJlIEJsYWNrLVNjaG9sZXMgZXN0aW1hdGVzOyB5b3VyIGJyb2tlcidzIGdyZWVrcyBtYXkgZGlmZmVyCiAgc2xpZ2h0bHkuCgojIyBSb2FkbWFwCgotIHYyOiDinIUgYnVsbC1wdXQtc3ByZWFkIHNpZ25hbHMgKHNoaXBwZWQgMjAyNi0xMC0xMCk7IOKchSBtb2RlbC1iYXNlZAogIGJhY2t0ZXN0aW5nIChzaGlwcGVkIDIwMjYtMTAtMTI6IEJsYWNrLVNjaG9sZXMgcHJlbWl1bSBzaW11bGF0aW9uIHdpdGggYW4KICBJViBwcm94eSDigJQgbm90IGhpc3RvcmljYWwgY2hhaW5zLCB3aGljaCBubyBmcmVlIHNvdXJjZSBwdWJsaXNoZXMpOwogIHJlbWFpbmluZzogdHJ1ZSBJViByYW5rIHZpYSBoaXN0b3JpY2FsLUlWIGZlZWQuCi0gdjM6IGFsZXJ0aW5nIChlbWFpbC93ZWJob29rKSBvbiBuZXcgc2lnbmFscy4KLSBMYXRlciwgb25seSB3aXRoIGV4cGxpY2l0IGFwcHJvdmFsIGF0IGVhY2ggc3RhZ2U6IHBhcGVyLXRyYWRpbmcgYnJva2VyCiAgaW50ZWdyYXRpb24uICoqTGl2ZSBhdXRvLXRyYWRpbmcgaXMgbmV2ZXIgaW4gc2NvcGUgd2l0aG91dCB0aGUgb3duZXIncwogIGV4cGxpY2l0IGdvLWFoZWFkLioqCgojIyBMaWNlbnNlCgpNSVQg4oCUIHNlZSBbTElDRU5TRV0oTElDRU5TRSkuCg==
+# options-screener
+
+A daily signal screener for **weekly options premium selling** — research only.
+Each run scans a watchlist of liquid, optionable stocks/ETFs, pulls put chains,
+and emits concrete cash-secured-put candidates: **~30 delta, 30–45 DTE**,
+passing liquidity filters, with mechanical exit rules. Output is a readable
+Markdown report plus machine-readable JSON.
+
+> ⚠️ **Risk disclaimer — read first.** This is an educational research tool,
+> **not financial advice**. Options involve substantial risk of loss, including
+> losing the entire premium and, for cash-secured puts, being assigned the
+> underlying at the strike price. Paper-trade every signal before risking real
+> capital. No returns are guaranteed. Nothing in this repo places trades,
+> connects to a broker, or should be interpreted as a recommendation to buy or
+> sell any security.
+
+## What it does
+
+For each ticker in the watchlist (`config.yaml`):
+
+1. Fetches 1 year of price history and the put chain for the expiration
+   closest to the middle of the 30–45 DTE band.
+2. Estimates put deltas with Black-Scholes (fixed risk-free-rate assumption).
+3. Computes an **IV-vs-HV gauge**: current contract IV positioned inside the
+   ticker's 1-year realized-volatility range. This is a *proxy*, not a true IV
+   rank (see [data limitations](#data-limitations)).
+4. Applies **liquidity filters**: minimum open interest, minimum daily option
+   volume, maximum bid-ask spread width.
+5. Keeps strikes near **−0.30 delta** with premium ≥ 1% of strike, ranked by
+   annualized yield.
+6. Builds **bull put spreads** (v2): for each CSP candidate, pairs it with a
+   cheaper same-expiry long put 2–6% of the short strike lower, passing the
+   same liquidity filters and collecting ≥ 1/3 of the spread width in credit.
+   Max loss is capped at (width − credit); spreads are ranked by return on
+   risk. This is the defined-risk version of the same trade.
+7. Attaches a mechanical **exit plan** to every signal and spread: close at
+   50% of max profit, exit/roll at 21 DTE, manage at 2× premium/credit.
+
+## Quickstart
+
+```bash
+python -m venv .venv && source .venv/bin/activate
+pip install -r requirements.txt
+python screener.py
+# writes reports/report_YYYY-MM-DD.md and .json
+```
+
+Run with a custom config or output dir:
+
+```bash
+python screener.py --config config.yaml --out-dir reports/
+```
+
+Run the tests (no network needed):
+
+```bash
+pytest -q
+```
+
+## Backtesting the strategy
+
+`backtest.py` simulates the CSP strategy over historical daily closes and
+writes a Markdown + JSON report (trade log, win rate, P&L per contract,
+max drawdown, exit breakdown):
+
+```bash
+python backtest.py --ticker SPY --years 2
+python backtest.py --all --years 5   # whole watchlist
+# writes reports/backtest_YYYY-MM-DD.md and .json
+```
+
+How it works: every 5 trading days it sells a ~30-delta put (35 DTE by
+default, `backtest.entry_dte` in `config.yaml`), prices premiums with
+Black-Scholes against an IV proxy (trailing 20-day realized vol × 1.15),
+and applies the same exit rules as the screener (50% of max profit,
+21-DTE management, 2×-premium loss management).
+
+> ⚠️ **Model-based, not historical-chain data.** No free source publishes
+> historical option chains, so premiums are *simulated*, not observed. IV is
+> held constant per trade, there are no commissions or slippage, and fills
+> are at model mid. Treat results as illustrative research — a sanity check
+> on the mechanics, never as expected returns.
+
+## Configuration
+
+Everything tunable lives in `config.yaml`: the watchlist, the DTE band,
+delta target/tolerance, minimum premium, liquidity thresholds, the risk-free
+rate assumption, and the exit rules. Edit it, re-run, done.
+
+## Data limitations
+
+- Quotes come from **yfinance**, an unofficial Yahoo Finance API: delayed
+  ~15 minutes, and the endpoint can change or break without notice. The
+  screener surfaces fetch failures instead of silently using stale data.
+- **True IV rank, built not bought.** Free sources don't publish a historical
+  IV series, so the screener builds its own: each run snapshots the day's
+  ~30-delta short-put IV per ticker into `iv_history/<TICKER>.jsonl`
+  (git-ignored). Once a ticker has 10 daily snapshots in the same DTE band
+  (configurable), the report shows a true IV rank — today's IV inside the
+  ticker's own observed range — with the snapshot count beside it, so a
+  young rank is never mistaken for a 1-year one. Before that, the report
+  shows the IV-vs-HV proxy and labels it `(proxy)`.
+- Deltas are Black-Scholes estimates; your broker's greeks may differ
+  slightly.
+
+## Roadmap
+
+- v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
+  backtesting (shipped 2026-10-12: Black-Scholes premium simulation with an
+  IV proxy — not historical chains, which no free source publishes); ✅ true
+  IV rank (shipped 2026-10-14: observed-IV history built from the tool's own
+  daily chain snapshots, no paid feed; IV-vs-HV proxy stays as the labeled
+  cold-start fallback).
+- v3: alerting (email/webhook) on new signals.
+- Later, only with explicit approval at each stage: paper-trading broker
+  integration. **Live auto-trading is never in scope without the owner's
+  explicit go-ahead.**
+
+## License
+
+MIT — see [LICENSE](LICENSE).

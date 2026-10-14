@@ -19,10 +19,38 @@ import yaml
 
 from options_screener.data import (DataError, get_closes, get_expirations,
                                    get_put_chain, pick_expiry)
+from options_screener.ivhistory import (iv_rank, load_observations,
+                                        record_observation)
 from options_screener.report import build_report_payload, write_reports
 from options_screener.signals import exit_plan, find_candidates
 from options_screener.spreads import find_spreads, spread_exit_plan
 from options_screener.vol import hv_range
+
+
+def attach_iv_rank(ticker: str, best: dict, dte: int, cfg: dict) -> dict:
+    """Snapshot today's IV and attach the true IV rank to a signal.
+
+    Records the day's ~30-delta short-put IV into the ticker's observed-IV
+    history, then computes the true IV rank (None until enough snapshots
+    exist — the report falls back to the labeled IV-vs-HV proxy in that
+    case). Returns the signal dict with `iv_rank_true`/`iv_rank_obs` set.
+    """
+    ivc = cfg.get("iv_rank", {})
+    if not ivc.get("enabled", True):
+        return best
+    strat = cfg["strategy"]
+    history_dir = ivc.get("history_dir", "iv_history")
+    try:
+        record_observation(history_dir, ticker, dte, best["iv"])
+        obs = load_observations(history_dir, ticker,
+                                strat["dte_min"], strat["dte_max"])
+        rank, n = iv_rank(best["iv"], obs,
+                          ivc.get("min_observations", 10))
+    except OSError:
+        return best
+    best["iv_rank_true"] = round(rank, 3) if rank is not None else None
+    best["iv_rank_obs"] = n
+    return best
 
 
 def screen_ticker(ticker: str, cfg: dict) -> dict:
@@ -46,6 +74,7 @@ def screen_ticker(ticker: str, cfg: dict) -> dict:
     best = signals[0]
     best.update({"ticker": ticker, "underlying": round(underlying, 2),
                  "exit_plan": exit_plan(best, cfg)})
+    attach_iv_rank(ticker, best, dte, cfg)
 
     spread = None
     if cfg.get("spread", {}).get("enabled", False):

@@ -12,6 +12,18 @@ DISCLAIMER = (
 )
 
 
+def _iv_rank_cell(s: dict) -> str:
+    """Render the IV-rank cell: true rank with observation count when the
+    observed-IV history is deep enough, otherwise the labeled IV-vs-HV proxy."""
+    true = s.get("iv_rank_true")
+    if true is not None:
+        return f"{true:.2f} (true, {s.get('iv_rank_obs', 0)}d)"
+    proxy = s.get("iv_vs_hv_rank")
+    if proxy is not None:
+        return f"{proxy:.2f} (proxy)"
+    return "n/a"
+
+
 def build_report_payload(results: dict, cfg: dict, as_of: str | None = None) -> dict:
     """Assemble the JSON-serializable report payload."""
     spread_cfg = cfg.get("spread", {})
@@ -53,15 +65,14 @@ def render_markdown(payload: dict) -> str:
         lines.append(f"## Signals ({len(signals)})")
         lines.append("")
         lines.append("| Ticker | Underlying | Strike | Expiry | DTE | Δ | IV | "
-                     "IV-vs-HV | Premium | Ann. yield | Bid/Ask | OI | Breakeven |")
+                     "IV rank | Premium | Ann. yield | Bid/Ask | OI | Breakeven |")
         lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         for s in signals:
-            ivh = f"{s['iv_vs_hv_rank']:.2f}" if s["iv_vs_hv_rank"] is not None else "n/a"
             anny = f"{s['annualized_yield']:.1%}" if s["annualized_yield"] is not None else "n/a"
             lines.append(
                 f"| {s['ticker']} | ${s['underlying']:.2f} | ${s['strike']:.2f} | "
                 f"{s['expiry']} | {s['dte']} | {s['delta']:.2f} | {s['iv']:.2%} | "
-                f"{ivh} | {s['premium_pct']:.2%} | {anny} | "
+                f"{_iv_rank_cell(s)} | {s['premium_pct']:.2%} | {anny} | "
                 f"${s['bid']:.2f}/${s['ask']:.2f} | {s['open_interest']} | "
                 f"${s['breakeven']:.2f} |")
         lines.append("")
@@ -118,9 +129,17 @@ def render_markdown(payload: dict) -> str:
     lines += [
         "## Method notes",
         "",
-        "- IV-vs-HV rank is a proxy: current contract IV positioned inside the "
-        "ticker's 1-year realized-vol range. True IV rank needs a historical-IV "
-        "feed (planned for v2).",
+        "- **IV rank (true)**: once the screener has collected at least "
+        "10 daily IV snapshots for a ticker (configurable), the IV-rank column "
+        "shows the true rank — today's contract IV positioned inside the "
+        "ticker's own observed IV range for the same DTE band — with the "
+        "snapshot count beside it. Only same-band snapshots are compared, so "
+        "the term structure doesn't contaminate the rank.",
+        "- **IV rank (proxy)**: before the history is deep enough, the "
+        "column shows a proxy — current IV inside the ticker's 1-year "
+        "realized-vol range — labeled `(proxy)`. No paid historical-IV feed "
+        "is needed; the history is built from this tool's own daily "
+        "snapshots (stored in `iv_history/`, git-ignored).",
         "- Bull put spreads: the short leg is the CSP candidate from the table "
         "above; the long leg is the cheaper same-expiry put, 2–6% of the short "
         "strike lower, that maximizes return on risk while passing liquidity "

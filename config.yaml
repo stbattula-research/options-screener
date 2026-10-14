@@ -1,1 +1,69 @@
-IyBvcHRpb25zLXNjcmVlbmVyIGNvbmZpZ3VyYXRpb24gKHYxKQojIFN0cmF0ZWd5OiBjYXNoLXNlY3VyZWQgcHV0IHNlbGxpbmcgb24gbGlxdWlkIHVuZGVybHlpbmdzLgoKd2F0Y2hsaXN0OgogICMgTGlxdWlkLCBvcHRpb25hYmxlIHN0b2Nrcy9FVEZzLiBFZGl0IGZyZWVseS4KICAtIFNQWQogIC0gUVFRCiAgLSBESUEKICAtIElXTQogIC0gQUFQTAogIC0gTVNGVAogIC0gTlZEQQogIC0gQU1ECiAgLSBUU0xBCiAgLSBNRVRBCiAgLSBBTVpOCiAgLSBHT09HTAogIC0gSlBNCiAgLSBYT00KICAtIE5GTFgKCnN0cmF0ZWd5OgogIGR0ZV9taW46IDMwICAgICAgICAgICMgbWluaW11bSBkYXlzIHRvIGV4cGlyYXRpb24gZm9yIHRoZSBzaG9ydCBwdXQKICBkdGVfbWF4OiA0NSAgICAgICAgICAjIG1heGltdW0gZGF5cyB0byBleHBpcmF0aW9uIGZvciB0aGUgc2hvcnQgcHV0CiAgdGFyZ2V0X2RlbHRhOiAtMC4zMCAgIyBjYXNoLXNlY3VyZWQgcHV0IHRhcmdldCBkZWx0YQogIGRlbHRhX3RvbGVyYW5jZTogMC4wNwogIG1pbl9wcmVtaXVtX3BjdDogMC4wMSAgIyBwcmVtaXVtIChtaWQpIG11c3QgYmUgPj0gMSUgb2Ygc3RyaWtlCgpsaXF1aWRpdHk6CiAgbWluX29wZW5faW50ZXJlc3Q6IDUwMAogIG1pbl92b2x1bWU6IDEwMAogIG1heF9zcHJlYWRfcGN0OiAwLjEwICAgIyAoYXNrIC0gYmlkKSAvIG1pZCBtdXN0IGJlIDw9IDEwJQoKIyB2MjogYnVsbCBwdXQgc3ByZWFkcyBidWlsdCBvdmVyIHRoZSBDU1AgY2FuZGlkYXRlcyAoZGVmaW5lZCByaXNrKS4KIyBTaG9ydCBsZWcgPSB0aGUgfjMwLWRlbHRhIENTUCBjYW5kaWRhdGU7IGxvbmcgbGVnID0gYSBjaGVhcGVyIHB1dCBvbiB0aGUKIyBzYW1lIGV4cGlyeS4gRW50cnk6IGxvbmcgc3RyaWtlIDItNiUgb2YgdGhlIHNob3J0IHN0cmlrZSBiZWxvdyBpdCwgcGFzc2luZwojIHRoZSBzYW1lIGxpcXVpZGl0eSBmaWx0ZXJzLCBjb2xsZWN0aW5nIGF0IGxlYXN0IDEvMyBvZiB0aGUgd2lkdGggaW4gY3JlZGl0LgpzcHJlYWQ6CiAgZW5hYmxlZDogdHJ1ZQogIG1pbl93aWR0aF9wY3Q6IDAuMDIKICBtYXhfd2lkdGhfcGN0OiAwLjA2CiAgbWluX2NyZWRpdF9mcmFjdGlvbjogMC4zMwoKIyBBc3N1bXB0aW9uOiBjb25zdGFudCByaXNrLWZyZWUgcmF0ZSB1c2VkIGZvciBkZWx0YSBlc3RpbWF0aW9uLgojIERvY3VtZW50ZWQgb3Blbmx5OyB2MiBjYW4gcHVsbCB0aGUgbGl2ZSBULWJpbGwgcmF0ZS4Kcmlza19mcmVlX3JhdGU6IDAuMDQKCmV4aXRzOgogIHByb2ZpdF90YXJnZXRfcGN0OiAwLjUwICAgIyBjbG9zZSBhdCA1MCUgb2YgbWF4IHByb2ZpdAogIG1hbmFnZV9kdGU6IDIxICAgICAgICAgICAgIyBleGl0IG9yIHJvbGwgYXQgMjEgRFRFCiAgbG9zc19tYW5hZ2VfbXVsdGlwbGU6IDIuMCAjIG1hbmFnZSB0aGUgdHJhZGUgaWYgbG9zcyByZWFjaGVzIDJ4IHByZW1pdW0gcmVjZWl2ZWQKCiMgQmFja3Rlc3QgZW5naW5lIChtb2RlbC1iYXNlZDogQmxhY2stU2Nob2xlcyBwcmVtaXVtcyB2cyBhbiBJViBwcm94eSDigJQKIyBOT1QgaGlzdG9yaWNhbCBvcHRpb24gY2hhaW5zLCB3aGljaCBubyBmcmVlIHNvdXJjZSBwdWJsaXNoZXMpLgpiYWNrdGVzdDoKICBlbnRyeV9kdGU6IDM1ICAgICAgICAgICAjIERURSBvZiBlYWNoIHNpbXVsYXRlZCBzaG9ydCBwdXQKICBlbnRyeV9pbnRlcnZhbF9kYXlzOiA1ICAjIGF0dGVtcHQgYSBuZXcgZW50cnkgZXZlcnkgTiB0cmFkaW5nIGRheXMgKGlmIGZsYXQpCiAgaXZfd2luZG93OiAyMCAgICAgICAgICAgIyB0cmFpbGluZyBkYXlzIGZvciB0aGUgcmVhbGl6ZWQtdm9sIElWIHByb3h5CiAgaXZfbXVsdGlwbGllcjogMS4xNSAgICAgIyBJViBwcm94eSA9IHJlYWxpemVkIHZvbCB4IG11bHRpcGxpZXIgKHZhcmlhbmNlIHJpc2sgcHJlbWl1bSkKICBpdl9mYWxsYmFjazogMC4yNSAgICAgICAjIHVzZWQgd2hpbGUgdHJhaWxpbmcgaGlzdG9yeSBpcyB0b28gc2hvcnQK
+# options-screener configuration (v1)
+# Strategy: cash-secured put selling on liquid underlyings.
+
+watchlist:
+  # Liquid, optionable stocks/ETFs. Edit freely.
+  - SPY
+  - QQQ
+  - DIA
+  - IWM
+  - AAPL
+  - MSFT
+  - NVDA
+  - AMD
+  - TSLA
+  - META
+  - AMZN
+  - GOOGL
+  - JPM
+  - XOM
+  - NFLX
+
+strategy:
+  dte_min: 30          # minimum days to expiration for the short put
+  dte_max: 45          # maximum days to expiration for the short put
+  target_delta: -0.30  # cash-secured put target delta
+  delta_tolerance: 0.07
+  min_premium_pct: 0.01  # premium (mid) must be >= 1% of strike
+
+liquidity:
+  min_open_interest: 500
+  min_volume: 100
+  max_spread_pct: 0.10   # (ask - bid) / mid must be <= 10%
+
+# v2: bull put spreads built over the CSP candidates (defined risk).
+# Short leg = the ~30-delta CSP candidate; long leg = a cheaper put on the
+# same expiry. Entry: long strike 2-6% of the short strike below it, passing
+# the same liquidity filters, collecting at least 1/3 of the width in credit.
+spread:
+  enabled: true
+  min_width_pct: 0.02
+  max_width_pct: 0.06
+  min_credit_fraction: 0.33
+
+# Assumption: constant risk-free rate used for delta estimation.
+# Documented openly; v2 can pull the live T-bill rate.
+risk_free_rate: 0.04
+
+# True IV rank (v2): each run snapshots the day's ~30-delta short-put IV into
+# iv_history/<TICKER>.jsonl. Once a ticker has min_observations snapshots for
+# the same DTE band, the report shows a true IV rank (with snapshot count);
+# before that, the IV-vs-HV proxy is used and labeled as a proxy.
+iv_rank:
+  enabled: true
+  history_dir: iv_history   # relative to where screener.py runs; git-ignored
+  min_observations: 10      # daily snapshots needed before true rank prints
+
+exits:
+  profit_target_pct: 0.50   # close at 50% of max profit
+  manage_dte: 21            # exit or roll at 21 DTE
+  loss_manage_multiple: 2.0 # manage the trade if loss reaches 2x premium received
+
+# Backtest engine (model-based: Black-Scholes premiums vs an IV proxy —
+# NOT historical option chains, which no free source publishes).
+backtest:
+  entry_dte: 35           # DTE of each simulated short put
+  entry_interval_days: 5  # attempt a new entry every N trading days (if flat)
+  iv_window: 20           # trailing days for the realized-vol IV proxy
+  iv_multiplier: 1.15     # IV proxy = realized vol x multiplier (variance risk premium)
+  iv_fallback: 0.25       # used while trailing history is too short

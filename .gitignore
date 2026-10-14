@@ -3,4 +3,6 @@ __pycache__/
 *.pyc
 .pytest_cache/
 reports/
+# Daily IV-snapshot history (built locally by screener.py; not committed).
+iv_history/
 .DS_Store
