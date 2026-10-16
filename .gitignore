@@ -6,3 +6,5 @@ reports/
 # Daily IV-snapshot history (built locally by screener.py; not committed).
 iv_history/
 .DS_Store
+# Daily alert-fired state (built locally by screener.py --alerts; not committed).
+alert_state/

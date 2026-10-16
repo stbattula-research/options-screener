@@ -67,3 +67,26 @@ backtest:
   iv_window: 20           # trailing days for the realized-vol IV proxy
   iv_multiplier: 1.15     # IV proxy = realized vol x multiplier (variance risk premium)
   iv_fallback: 0.25       # used while trailing history is too short
+
+# v3 alerting: email + webhook on NEW qualifying signals only (deduped via a
+# local state file). Opt-in: enabled must be true AND the channel's env vars
+# set. Run with `python screener.py --alerts` (or `--alerts-dry-run`).
+# NO credentials here, ever — SMTP password / webhook URL / addresses come
+# from environment variables only.
+alerts:
+  enabled: false
+  state_dir: alert_state   # git-ignored; remembers which signals already fired
+  rules:
+    min_annualized_yield: 0.12  # CSP: fire when annualized yield >= this
+    min_spread_roi: 0.30        # spread: fire when return on risk >= this
+    min_iv_rank_true: 0.75      # fire when true IV rank >= this (rich-IV regime)
+  email:
+    enabled: false
+    to: ""                  # env ALERT_EMAIL_TO
+    from_: ""               # env ALERT_EMAIL_FROM (defaults to SMTP user)
+    smtp_host: ""           # env ALERT_SMTP_HOST
+    smtp_port: 587          # env ALERT_SMTP_PORT
+    username: ""            # env ALERT_SMTP_USER; password ONLY env ALERT_SMTP_PASSWORD
+  webhook:
+    enabled: false
+    url: ""                 # env ALERT_WEBHOOK_URL (Discord/Slack-style POST)

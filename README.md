@@ -103,6 +103,38 @@ rate assumption, and the exit rules. Edit it, re-run, done.
 - Deltas are Black-Scholes estimates; your broker's greeks may differ
   slightly.
 
+## Alerts (v3): email + webhook on new signals
+
+Alerts are **opt-in** and fire only for *new* qualifying signals — a signal
+re-runs never re-fires (deduped against `alert_state/alerts.json`, local and
+git-ignored).
+
+```bash
+python screener.py --alerts            # send, per the alerts: config section
+python screener.py --alerts-dry-run   # print what would fire, send nothing
+```
+
+Rules live in `config.yaml` under `alerts:` — fire when a cash-secured put's
+annualized yield or true IV rank crosses a threshold, or a spread's return
+on risk crosses one:
+
+```yaml
+alerts:
+  enabled: true
+  rules:
+    min_annualized_yield: 0.12
+    min_spread_roi: 0.30
+    min_iv_rank_true: 0.75   # rich-IV regime
+  email:   {enabled: true}   # SMTP config from env vars (see below)
+  webhook: {enabled: true}   # URL from env var (Discord/Slack-style POST)
+```
+
+**Credentials are never in config.** Email needs `ALERT_EMAIL_TO`,
+`ALERT_SMTP_HOST`, `ALERT_SMTP_USER`, `ALERT_SMTP_PASSWORD` (and optional
+`ALERT_EMAIL_FROM`, `ALERT_SMTP_PORT`); the webhook needs
+`ALERT_WEBHOOK_URL`. Every alert body carries the risk disclaimer. A failed
+channel is reported and skipped — it never kills the run.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -111,7 +143,9 @@ rate assumption, and the exit rules. Edit it, re-run, done.
   IV rank (shipped 2026-10-14: observed-IV history built from the tool's own
   daily chain snapshots, no paid feed; IV-vs-HV proxy stays as the labeled
   cold-start fallback).
-- v3: alerting (email/webhook) on new signals.
+- v3: ✅ alerting (shipped 2026-10-16: email + webhook on new qualifying
+  signals, deduped via local state; credentials env-only; disclaimer in every
+  alert).
 - Later, only with explicit approval at each stage: paper-trading broker
   integration. **Live auto-trading is never in scope without the owner's
   explicit go-ahead.**

@@ -17,6 +17,7 @@ import traceback
 
 import yaml
 
+from options_screener.alerts import run_alerts
 from options_screener.data import (DataError, get_closes, get_expirations,
                                    get_put_chain, pick_expiry)
 from options_screener.ivhistory import (iv_rank, load_observations,
@@ -91,6 +92,12 @@ def main() -> int:
     ap = argparse.ArgumentParser(description="Daily options signal screener")
     ap.add_argument("--config", default="config.yaml")
     ap.add_argument("--out-dir", default="reports")
+    ap.add_argument("--alerts", action="store_true",
+                    help="run v3 alerting after the report (email/webhook, "
+                         "config alerts: section; off by default)")
+    ap.add_argument("--alerts-dry-run", action="store_true",
+                    help="evaluate alert rules and print what would fire, "
+                         "without sending or marking state")
     args = ap.parse_args()
 
     with open(args.config) as f:
@@ -130,6 +137,19 @@ def main() -> int:
     print(f"\nwrote {md_path}\nwrote {json_path}")
     print(f"{len(signals)} signal(s), {len(spreads)} spread(s), "
           f"{len(skipped)} skipped, {len(errors)} error(s)")
+
+    if args.alerts or args.alerts_dry_run:
+        if not cfg.get("alerts", {}).get("enabled", False):
+            print("[alerts] alerts.enabled is false in config — nothing sent "
+                  "(see config.yaml; credentials come from env vars only)")
+        else:
+            res = run_alerts(payload, cfg, dry_run=args.alerts_dry_run)
+            for it in (res["fired"] or res["would_fire"]):
+                print(f"[alert] {it['ticker']} [{it['kind']}] {it['reason']}")
+            for ch, err in res["channel_errors"].items():
+                print(f"[alert-error] {ch}: {err}", file=sys.stderr)
+            if not res["fired"] and not res["would_fire"] and not res["channel_errors"]:
+                print("[alerts] no new qualifying signals")
     return 0
 
 
