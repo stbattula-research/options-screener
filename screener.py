@@ -17,9 +17,10 @@ import traceback
 
 import yaml
 
-from options_screener.alerts import run_alerts
+from options_screener.alerts import (run_alerts, signal_key, spread_key)
 from options_screener.data import (DataError, get_closes, get_expirations,
                                    get_put_chain, pick_expiry)
+from options_screener import exits as exits_mod
 from options_screener.ivhistory import (iv_rank, load_observations,
                                         record_observation)
 from options_screener.report import build_report_payload, write_reports
@@ -65,12 +66,14 @@ def screen_ticker(ticker: str, cfg: dict) -> dict:
 
     puts = get_put_chain(ticker, expiry)
     hv = hv_range(closes)
+    marks = exits_mod.chain_index(puts)
 
     signals, rejected = find_candidates(puts, underlying, expiry, dte, hv, cfg)
     if not signals:
         why = "; ".join(f"${s:.0f}: {r}" for s, r in rejected) or "no strikes met all gates"
         return {"status": "skipped", "ticker": ticker,
-                "reason": f"{expiry} ({dte} DTE): {why}"}
+                "reason": f"{expiry} ({dte} DTE): {why}",
+                "marks": marks, "underlying": round(underlying, 2)}
 
     best = signals[0]
     best.update({"ticker": ticker, "underlying": round(underlying, 2),
@@ -85,7 +88,58 @@ def screen_ticker(ticker: str, cfg: dict) -> dict:
             spread.update({"ticker": ticker,
                            "underlying": round(underlying, 2),
                            "exit_plan": spread_exit_plan(spread, cfg)})
-    return {"status": "signal", "signal": best, "spread": spread}
+    return {"status": "signal", "signal": best, "spread": spread,
+            "marks": marks, "underlying": round(underlying, 2)}
+
+
+def run_paper_tracking(payload: dict, cfg: dict, market: dict,
+                       alerts_result: dict | None) -> dict:
+    """Open paper positions from newly fired alerts; mark and exit-check all
+    open positions against today's chains. Returns a report-ready dict."""
+    pcfg = cfg.get("paper", {}) or {}
+    as_of = payload["as_of"]
+    state_dir = pcfg.get("state_dir", "positions")
+    store = exits_mod.load_store(state_dir)
+
+    # Open: only from NEWLY fired alerts (dedupe in alerts.py already
+    # prevents re-fire), and never re-open a closed position's key.
+    fired = (alerts_result or {}).get("fired", [])
+    opened = []
+    if pcfg.get("open_from_alerts", True) and fired:
+        by_key = {signal_key(s): s for s in payload["signals"]}
+        by_key.update({spread_key(sp): sp for sp in payload["spreads"]})
+        contracts = pcfg.get("contracts", 1)
+        candidates = []
+        for it in fired:
+            cand = by_key.get(it["key"])
+            if cand is None:
+                continue
+            candidates.append({**cand, "contracts": contracts})
+        opened = exits_mod.open_positions(candidates, store,
+                                          pcfg.get("max_open", 10))
+
+    # Mark + exit-check every open position against today's chains.
+    snapshots = {}
+    for pos in store["open"]:
+        mkt = market.get(pos["ticker"])
+        if mkt is None:
+            continue
+        snap = exits_mod.build_snapshot(pos, mkt, as_of)
+        if snap is not None:
+            snapshots[pos["key"]] = snap
+    result = exits_mod.update_positions(store, snapshots, cfg["exits"],
+                                        as_of=as_of)
+    exits_mod.save_store(state_dir, store)
+
+    for p in opened:
+        print(f"[paper] opened {p['ticker']} {p['key'].split('|')[-1]} "
+              f"({p['kind']}) @ ${p['entry_credit']:.2f}/share credit")
+    for c in result["closed_today"]:
+        print(f"[paper] closed {c['ticker']} ({c['exit_reason']}): "
+              f"${c['realized']:+.2f} per contract")
+    return {"opened": opened, "open": store["open"],
+            "closed_today": result["closed_today"],
+            "state_dir": state_dir}
 
 
 def main() -> int:
@@ -98,12 +152,18 @@ def main() -> int:
     ap.add_argument("--alerts-dry-run", action="store_true",
                     help="evaluate alert rules and print what would fire, "
                          "without sending or marking state")
+    ap.add_argument("--paper-track", action="store_true",
+                    help="paper position tracking: open paper positions from "
+                         "newly fired alerts and mark/exit-check all open "
+                         "positions (config paper: section; off by default; "
+                         "research only, never places orders)")
     args = ap.parse_args()
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
 
     signals, spreads, skipped, errors = [], [], [], []
+    market = {}
     for ticker in cfg["watchlist"]:
         try:
             res = screen_ticker(ticker, cfg)
@@ -127,29 +187,50 @@ def main() -> int:
         else:
             skipped.append({"ticker": res["ticker"], "reason": res["reason"]})
             print(f"[skip] {ticker}: {res['reason'][:90]}")
+        market[ticker] = {"marks": res["marks"],
+                          "underlying": res["underlying"]}
 
     signals.sort(key=lambda s: s["annualized_yield"] or 0, reverse=True)
     spreads.sort(key=lambda s: s["roi"], reverse=True)
-    payload = build_report_payload(
-        {"signals": signals, "spreads": spreads,
-         "skipped": skipped, "errors": errors}, cfg)
-    md_path, json_path = write_reports(payload, args.out_dir)
-    print(f"\nwrote {md_path}\nwrote {json_path}")
-    print(f"{len(signals)} signal(s), {len(spreads)} spread(s), "
-          f"{len(skipped)} skipped, {len(errors)} error(s)")
 
+    alerts_result = None
     if args.alerts or args.alerts_dry_run:
         if not cfg.get("alerts", {}).get("enabled", False):
             print("[alerts] alerts.enabled is false in config — nothing sent "
                   "(see config.yaml; credentials come from env vars only)")
         else:
-            res = run_alerts(payload, cfg, dry_run=args.alerts_dry_run)
+            alerts_result = run_alerts(
+                build_report_payload(
+                    {"signals": signals, "spreads": spreads,
+                     "skipped": skipped, "errors": errors}, cfg),
+                cfg, dry_run=args.alerts_dry_run)
+            res = alerts_result
             for it in (res["fired"] or res["would_fire"]):
                 print(f"[alert] {it['ticker']} [{it['kind']}] {it['reason']}")
             for ch, err in res["channel_errors"].items():
                 print(f"[alert-error] {ch}: {err}", file=sys.stderr)
             if not res["fired"] and not res["would_fire"] and not res["channel_errors"]:
                 print("[alerts] no new qualifying signals")
+
+    paper = None
+    if args.paper_track:
+        if not cfg.get("paper", {}).get("enabled", False):
+            print("[paper] paper.enabled is false in config — tracking "
+                  "skipped (see config.yaml)")
+        else:
+            paper = run_paper_tracking(
+                build_report_payload(
+                    {"signals": signals, "spreads": spreads,
+                     "skipped": skipped, "errors": errors}, cfg),
+                cfg, market, alerts_result)
+
+    payload = build_report_payload(
+        {"signals": signals, "spreads": spreads,
+         "skipped": skipped, "errors": errors, "paper": paper}, cfg)
+    md_path, json_path = write_reports(payload, args.out_dir)
+    print(f"\nwrote {md_path}\nwrote {json_path}")
+    print(f"{len(signals)} signal(s), {len(spreads)} spread(s), "
+          f"{len(skipped)} skipped, {len(errors)} error(s)")
     return 0
 
 

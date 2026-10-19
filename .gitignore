@@ -8,3 +8,5 @@ iv_history/
 .DS_Store
 # Daily alert-fired state (built locally by screener.py --alerts; not committed).
 alert_state/
+# Paper position state (built locally by screener.py --paper-track; not committed).
+positions/

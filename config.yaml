@@ -90,3 +90,17 @@ alerts:
   webhook:
     enabled: false
     url: ""                 # env ALERT_WEBHOOK_URL (Discord/Slack-style POST)
+
+# Paper position tracking: the signal -> alert -> exit loop as a research
+# simulation. Positions open automatically from NEWLY fired alerts
+# (open_from_alerts) and are marked against each day's chain; exits use the
+# SAME rules as the exits: section (50% of max profit / 21 DTE /
+# 2x-premium loss). Paper only — this module never places orders and holds
+# no broker credentials. Run with `python screener.py --alerts
+# --paper-track` (alerts must be enabled for new positions to open).
+paper:
+  enabled: false
+  state_dir: positions    # git-ignored; open + closed paper positions
+  open_from_alerts: true  # auto-open a paper position per newly fired alert
+  contracts: 1            # paper contracts per position (research sizing)
+  max_open: 10            # cap on simultaneous paper positions

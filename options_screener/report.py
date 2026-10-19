@@ -39,13 +39,66 @@ def build_report_payload(results: dict, cfg: dict, as_of: str | None = None) -> 
             "spread": {k: spread_cfg.get(k) for k in
                        ("enabled", "min_width_pct", "max_width_pct",
                         "min_credit_fraction")} if spread_cfg else None,
+            "paper": cfg.get("paper", {}).get("enabled", False),
         },
         "disclaimer": DISCLAIMER,
         "signals": results["signals"],
         "spreads": results.get("spreads", []),
+        "paper": results.get("paper"),
         "skipped": results["skipped"],
         "errors": results["errors"],
     }
+
+
+def _position_label(p: dict) -> str:
+    if p["kind"] == "spread":
+        return (f"${p['short_strike']:.0f}/${p['long_strike']:.0f} "
+                f"spread {p['expiry']}")
+    return f"${p['strike']:.0f} put {p['expiry']}"
+
+
+def render_paper_section(paper: dict) -> list:
+    """Markdown for the paper position-tracking section."""
+    lines = ["## Paper positions (research)", "",
+             "Paper-trade only — these positions were never opened at a "
+             "broker. Exits follow the same mechanical rules as the exit "
+             "plans above (50% of max profit, 21 DTE, 2x-premium loss).",
+             ""]
+    opened, open_, closed = (paper["opened"], paper["open"],
+                             paper["closed_today"])
+    lines.append(f"Opened this run: {len(opened)} · "
+                 f"Closed this run: {len(closed)} · "
+                 f"Still open: {len(open_)}.")
+    lines.append("")
+    if closed:
+        lines.append("### Closed today")
+        lines.append("")
+        lines.append("| Ticker | Position | Opened | Exit | P&L/contract |")
+        lines.append("|---|---|---|---|---|")
+        for c in closed:
+            lines.append(
+                f"| {c['ticker']} | {_position_label(c)} | {c['opened']} | "
+                f"{c['exit_reason']} | ${c['realized']:+.2f} |")
+        lines.append("")
+    if open_:
+        lines.append("### Open")
+        lines.append("")
+        lines.append("| Ticker | Position | Entry credit | Mark | "
+                     "Unrealized | DTE | Days held |")
+        lines.append("|---|---|---|---|---|---|---|")
+        for p in open_:
+            unreal = (f"${p['last_unrealized']:+.2f}"
+                      if p.get("last_unrealized") is not None else "stale")
+            mark = (f"${p['last_mark']:.2f}"
+                    if p.get("last_mark") is not None else "stale")
+            dte = p.get("last_dte", "—")
+            held = p.get("days_held", "—")
+            lines.append(
+                f"| {p['ticker']} | {_position_label(p)} | "
+                f"${p['entry_credit']:.2f} | {mark} | {unreal} | "
+                f"{dte} | {held} |")
+        lines.append("")
+    return lines
 
 
 def render_markdown(payload: dict) -> str:
@@ -112,6 +165,10 @@ def render_markdown(payload: dict) -> str:
                          f"{e['profit_target']}; {e['time_exit']}; {e['loss_manage']}.")
         lines.append("")
 
+    paper = payload.get("paper")
+    if paper is not None:
+        lines.extend(render_paper_section(paper))
+
     if payload["skipped"]:
         lines.append("## No signal (why)")
         lines.append("")
@@ -148,6 +205,12 @@ def render_markdown(payload: dict) -> str:
         "assumption; broker greeks may differ slightly.",
         "- Signals are candidates for *research*, not orders. Nothing here "
         "places or suggests placing a trade automatically.",
+        "- Paper positions: positions opened automatically from *newly fired* "
+        "alerts (never from plain signals) and marked against the next "
+        "day's chain. A position only exits via the mechanical rules above; "
+        "a missing quote or an unparseable expiry holds the position as "
+        "stale rather than guessing. Closed positions are never re-opened "
+        "by later alerts. State lives in `positions/` (git-ignored).",
     ]
     return "\n".join(lines) + "\n"
 

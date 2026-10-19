@@ -135,6 +135,38 @@ alerts:
 `ALERT_WEBHOOK_URL`. Every alert body carries the risk disclaimer. A failed
 channel is reported and skipped — it never kills the run.
 
+## Paper positions: signal → alert → exit tracking
+
+Signals and alerts answer "what looks good today"; paper tracking answers
+"what happened to the ones we tracked". It is **opt-in** (`paper: enabled:
+true`) and **paper only** — nothing here ever places an order or holds
+broker credentials.
+
+```bash
+python screener.py --alerts --paper-track
+```
+
+What a run does:
+
+1. **Opens** one paper position per *newly fired alert* (never from plain
+   signals; at most `max_open` positions at once, `contracts` per position
+   for research sizing).
+2. **Marks** every open position against that day's option chain
+   (short-put mid, or short-minus-long for spreads) and records days held.
+3. **Exit-checks** against the same mechanical rules as the exit plans —
+   close at 50% of max profit, at 21 DTE, or when the loss reaches 2x the
+   premium received (settled at intrinsic on expiry, with assignment
+   flagged). A missing quote or an unparseable expiry holds the position
+   as *stale* rather than guessing.
+4. Prints a **Paper positions** section in the daily report with today's
+   opens/closes plus every open position's unrealized P&L, DTE and days
+   held.
+
+Position keys reuse the alert dedupe keys (`ticker|expiry|strike`), so an
+alert can only ever open one position and a closed position is never
+silently re-opened. State lives in `positions/positions.json` (local,
+git-ignored). Closed P&L is summed over contracts × 100 shares.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -146,6 +178,10 @@ channel is reported and skipped — it never kills the run.
 - v3: ✅ alerting (shipped 2026-10-16: email + webhook on new qualifying
   signals, deduped via local state; credentials env-only; disclaimer in every
   alert).
+- v4: ✅ paper position tracking (shipped 2026-10-18: positions open from
+  newly fired alerts, marked against each day's chain, exit-checked on the
+  50%-profit / 21-DTE / 2x-premium rules; stale holds when quotes are
+  missing; paper only, no orders, no broker credentials).
 - Later, only with explicit approval at each stage: paper-trading broker
   integration. **Live auto-trading is never in scope without the owner's
   explicit go-ahead.**
