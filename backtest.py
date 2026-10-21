@@ -1,1 +1,122 @@
-IyEvdXNyL2Jpbi9lbnYgcHl0aG9uMwoiIiJCYWNrdGVzdCB0aGUgb3B0aW9ucy1zY3JlZW5lciBwcmVtaXVtLXNlbGxpbmcgc3RyYXRlZ3kgKHJlc2VhcmNoIG9ubHkpLgoKU2ltdWxhdGVzIH4zMC1kZWx0YSBjYXNoLXNlY3VyZWQgcHV0cyBvdmVyIGhpc3RvcmljYWwgZGFpbHkgY2xvc2VzIGFuZAp3cml0ZXMgYSBNYXJrZG93biArIEpTT04gcmVwb3J0LiBNb2RlbC1iYXNlZDogcHJlbWl1bXMgYXJlIHByaWNlZCB3aXRoCkJsYWNrLVNjaG9sZXMgYWdhaW5zdCBhbiBJViBwcm94eSwgTk9UIGZyb20gaGlzdG9yaWNhbCBvcHRpb24gY2hhaW5zIOKAlApyZXN1bHRzIGFyZSBpbGx1c3RyYXRpdmUgcmVzZWFyY2gsIG5vdCBleHBlY3RlZCByZXR1cm5zLgoKU2lnbmFscyBvbmx5LiBUaGlzIHRvb2wgbmV2ZXIgcGxhY2VzIG9yZGVycyBhbmQgaG9sZHMgbm8gYnJva2VyIGNyZWRlbnRpYWxzLgoKVXNhZ2U6CiAgICBweXRob24gYmFja3Rlc3QucHkgWy0tY29uZmlnIGNvbmZpZy55YW1sXSBbLS1vdXQtZGlyIHJlcG9ydHNdCiAgICAgICAgICAgICAgICAgICAgICAgWy0tdGlja2VyIFNQWSB8IC0tYWxsXSBbLS15ZWFycyAzXQoiIiIKCmltcG9ydCBhcmdwYXJzZQppbXBvcnQganNvbgppbXBvcnQgc3lzCmltcG9ydCB0cmFjZWJhY2sKZnJvbSBkYXRldGltZSBpbXBvcnQgZGF0ZQoKaW1wb3J0IHlhbWwKCmZyb20gb3B0aW9uc19zY3JlZW5lci5iYWNrdGVzdCBpbXBvcnQgKGJ1aWxkX2JhY2t0ZXN0X3BheWxvYWQsCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgIHJlbmRlcl9iYWNrdGVzdF9tYXJrZG93biwKICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgc2ltdWxhdGUsIHN1bW1hcml6ZSkKZnJvbSBvcHRpb25zX3NjcmVlbmVyLmRhdGEgaW1wb3J0IERhdGFFcnJvciwgZ2V0X2Nsb3NlcwoKCmRlZiBiYWNrdGVzdF90aWNrZXIodGlja2VyLCBjZmcsIHllYXJzKToKICAgIGNsb3NlcyA9IGdldF9jbG9zZXModGlja2VyLCBwZXJpb2Q9ZiJ7eWVhcnN9eSIpCiAgICB0cmFkZXMgPSBzaW11bGF0ZShjbG9zZXMsIGNmZykKICAgIHJldHVybiB7InRyYWRlcyI6IHRyYWRlcywgInN1bW1hcnkiOiBzdW1tYXJpemUodHJhZGVzKX0KCgpkZWYgd3JpdGVfYmFja3Rlc3RfcmVwb3J0cyhwYXlsb2FkLCBvdXRfZGlyKToKICAgIGltcG9ydCBvcwogICAgb3MubWFrZWRpcnMob3V0X2RpciwgZXhpc3Rfb2s9VHJ1ZSkKICAgIHN0YW1wID0gZGF0ZS50b2RheSgpLmlzb2Zvcm1hdCgpCiAgICBtZF9wYXRoID0gb3MucGF0aC5qb2luKG91dF9kaXIsIGYiYmFja3Rlc3Qte3N0YW1wfS5tZCIpCiAgICBqc29uX3BhdGggPSBvcy5wYXRoLmpvaW4ob3V0X2RpciwgZiJiYWNrdGVzdC17c3RhbXB9Lmpzb24iKQogICAgd2l0aCBvcGVuKG1kX3BhdGgsICJ3IikgYXMgZjoKICAgICAgICBmLndyaXRlKHJlbmRlcl9iYWNrdGVzdF9tYXJrZG93bihwYXlsb2FkKSkKICAgIHdpdGggb3Blbihqc29uX3BhdGgsICJ3IikgYXMgZjoKICAgICAgICBqc29uLmR1bXAocGF5bG9hZCwgZiwgaW5kZW50PTIpCiAgICByZXR1cm4gbWRfcGF0aCwganNvbl9wYXRoCgoKZGVmIG1haW4oKSAtPiBpbnQ6CiAgICBhcCA9IGFyZ3BhcnNlLkFyZ3VtZW50UGFyc2VyKGRlc2NyaXB0aW9uPSJCYWNrdGVzdCB0aGUgcHJlbWl1bS1zZWxsaW5nIHN0cmF0ZWd5IikKICAgIGFwLmFkZF9hcmd1bWVudCgiLS1jb25maWciLCBkZWZhdWx0PSJjb25maWcueWFtbCIpCiAgICBhcC5hZGRfYXJndW1lbnQoIi0tb3V0LWRpciIsIGRlZmF1bHQ9InJlcG9ydHMiKQogICAgYXAuYWRkX2FyZ3VtZW50KCItLXRpY2tlciIsIGRlZmF1bHQ9Tm9uZSkKICAgIGFwLmFkZF9hcmd1bWVudCgiLS1hbGwiLCBhY3Rpb249InN0b3JlX3RydWUiLAogICAgICAgICAgICAgICAgICAgIGhlbHA9ImJhY2t0ZXN0IGV2ZXJ5IHRpY2tlciBpbiB0aGUgY29uZmlnIHdhdGNobGlzdCIpCiAgICBhcC5hZGRfYXJndW1lbnQoIi0teWVhcnMiLCB0eXBlPWludCwgZGVmYXVsdD0zKQogICAgYXJncyA9IGFwLnBhcnNlX2FyZ3MoKQoKICAgIHdpdGggb3BlbihhcmdzLmNvbmZpZykgYXMgZjoKICAgICAgICBjZmcgPSB5YW1sLnNhZmVfbG9hZChmKQoKICAgIGlmIGFyZ3MuYWxsOgogICAgICAgIHRpY2tlcnMgPSBjZmdbIndhdGNobGlzdCJdCiAgICBlbGlmIGFyZ3MudGlja2VyOgogICAgICAgIHRpY2tlcnMgPSBbYXJncy50aWNrZXJdCiAgICBlbHNlOgogICAgICAgIHRpY2tlcnMgPSBbY2ZnWyJ3YXRjaGxpc3QiXVswXV0KCiAgICByZXN1bHRzLCBlcnJvcnMgPSB7fSwgW10KICAgIGZvciB0aWNrZXIgaW4gdGlja2VyczoKICAgICAgICB0cnk6CiAgICAgICAgICAgIHJlcyA9IGJhY2t0ZXN0X3RpY2tlcih0aWNrZXIsIGNmZywgYXJncy55ZWFycykKICAgICAgICAgICAgcmVzdWx0c1t0aWNrZXJdID0gcmVzCiAgICAgICAgICAgIHMgPSByZXNbInN1bW1hcnkiXQogICAgICAgICAgICBwcmludChmIlt7dGlja2VyfV0ge3NbJ3RyYWRlcyddfSB0cmFkZXMsIHdpbiB7c1snd2luX3JhdGUnXX0sICIKICAgICAgICAgICAgICAgICAgZiJQJkwgJHtzWyd0b3RhbF9wbmwnXTosLjJmfSwgbWF4IEREICR7c1snbWF4X2RyYXdkb3duJ106LC4yZn0iKQogICAgICAgIGV4Y2VwdCBEYXRhRXJyb3IgYXMgZXhjOgogICAgICAgICAgICBlcnJvcnMuYXBwZW5kKHN0cihleGMpKQogICAgICAgICAgICBwcmludChmIltlcnJvcl0ge2V4Y30iLCBmaWxlPXN5cy5zdGRlcnIpCiAgICAgICAgZXhjZXB0IEV4Y2VwdGlvbjogICMgbmV2ZXIgbGV0IG9uZSB0aWNrZXIga2lsbCB0aGUgcnVuCiAgICAgICAgICAgIGVycm9ycy5hcHBlbmQoZiJ7dGlja2VyfTogdW5leHBlY3RlZCBlcnJvclxue3RyYWNlYmFjay5mb3JtYXRfZXhjKGxpbWl0PTMpfSIpCgogICAgcGF5bG9hZCA9IGJ1aWxkX2JhY2t0ZXN0X3BheWxvYWQocmVzdWx0cywgY2ZnKQogICAgbWRfcGF0aCwganNvbl9wYXRoID0gd3JpdGVfYmFja3Rlc3RfcmVwb3J0cyhwYXlsb2FkLCBhcmdzLm91dF9kaXIpCiAgICBwcmludChmIlxud3JvdGUge21kX3BhdGh9XG53cm90ZSB7anNvbl9wYXRofSIpCiAgICBpZiBlcnJvcnM6CiAgICAgICAgcHJpbnQoZiJ7bGVuKGVycm9ycyl9IGVycm9yKHMpIiwgZmlsZT1zeXMuc3RkZXJyKQogICAgICAgIHJldHVybiAxCiAgICByZXR1cm4gMAoKCmlmIF9fbmFtZV9fID09ICJfX21haW5fXyI6CiAgICBzeXMuZXhpdChtYWluKCkpCg==
+#!/usr/bin/env python3
+"""Backtest the options-screener premium-selling strategy (research only).
+
+Simulates ~30-delta cash-secured puts over historical daily closes and
+writes a Markdown + JSON report. Model-based: premiums are priced with
+Black-Scholes against an IV proxy, NOT from historical option chains —
+results are illustrative research, not expected returns.
+
+Signals only. This tool never places orders and holds no broker credentials.
+
+Usage:
+    python backtest.py [--config config.yaml] [--out-dir reports]
+                       [--ticker SPY | --all] [--years 3] [--sweep]
+"""
+
+import argparse
+import json
+import sys
+import traceback
+from datetime import date
+
+import yaml
+
+from options_screener.backtest import (DEFAULT_SWEEP_GRID,
+                                       build_backtest_payload,
+                                       build_sweep_payload,
+                                       default_sweep_key, rank_sweep,
+                                       render_backtest_markdown,
+                                       render_sweep_markdown,
+                                       simulate, summarize, sweep_exit_rules)
+from options_screener.data import DataError, get_closes
+
+
+def backtest_ticker(ticker, cfg, years, sweep=False):
+    closes = get_closes(ticker, period=f"{years}y")
+    if not sweep:
+        trades = simulate(closes, cfg)
+        return {"trades": trades, "summary": summarize(trades)}
+    grid = cfg.get("backtest_sweep") or DEFAULT_SWEEP_GRID
+    results = sweep_exit_rules(closes, cfg, grid)
+    return rank_sweep(results, default_sweep_key(cfg))
+
+
+def write_reports(payload, out_dir, prefix, render):
+    import os
+    os.makedirs(out_dir, exist_ok=True)
+    stamp = date.today().isoformat()
+    md_path = os.path.join(out_dir, f"{prefix}-{stamp}.md")
+    json_path = os.path.join(out_dir, f"{prefix}-{stamp}.json")
+    with open(md_path, "w") as f:
+        f.write(render(payload))
+    with open(json_path, "w") as f:
+        json.dump(payload, f, indent=2)
+    return md_path, json_path
+
+
+def write_backtest_reports(payload, out_dir):
+    return write_reports(payload, out_dir, "backtest", render_backtest_markdown)
+
+
+def main() -> int:
+    ap = argparse.ArgumentParser(description="Backtest the premium-selling strategy")
+    ap.add_argument("--config", default="config.yaml")
+    ap.add_argument("--out-dir", default="reports")
+    ap.add_argument("--ticker", default=None)
+    ap.add_argument("--all", action="store_true",
+                    help="backtest every ticker in the config watchlist")
+    ap.add_argument("--years", type=int, default=3)
+    ap.add_argument("--sweep", action="store_true",
+                    help="run the exit-rule sensitivity sweep instead of the "
+                         "plain backtest (grid from backtest_sweep: in config)")
+    args = ap.parse_args()
+
+    with open(args.config) as f:
+        cfg = yaml.safe_load(f)
+
+    if args.all:
+        tickers = cfg["watchlist"]
+    elif args.ticker:
+        tickers = [args.ticker]
+    else:
+        tickers = [cfg["watchlist"][0]]
+
+    results, errors = {}, []
+    for ticker in tickers:
+        try:
+            res = backtest_ticker(ticker, cfg, args.years, sweep=args.sweep)
+            results[ticker] = res
+            if args.sweep:
+                best = res[0]
+                default = next(r for r in res if r["is_default"])
+                print(f"[{ticker}] best {best['key']} "
+                      f"${best['summary']['total_pnl']:+,.2f}; default ranks "
+                      f"#{default['rank']}/{len(res)} "
+                      f"(${default['summary']['total_pnl']:+,.2f})")
+            else:
+                s = res["summary"]
+                print(f"[{ticker}] {s['trades']} trades, win {s['win_rate']}, "
+                      f"P&L ${s['total_pnl']:,.2f}, max DD ${s['max_drawdown']:,.2f}")
+        except DataError as exc:
+            errors.append(str(exc))
+            print(f"[error] {exc}", file=sys.stderr)
+        except Exception:  # never let one ticker kill the run
+            errors.append(f"{ticker}: unexpected error\n{traceback.format_exc(limit=3)}")
+
+    if args.sweep:
+        grid = cfg.get("backtest_sweep") or DEFAULT_SWEEP_GRID
+        payload = build_sweep_payload(results, cfg, grid)
+        md_path, json_path = write_reports(payload, args.out_dir, "backtest-sweep",
+                                           render_sweep_markdown)
+    else:
+        payload = build_backtest_payload(results, cfg)
+        md_path, json_path = write_backtest_reports(payload, args.out_dir)
+    print(f"\nwrote {md_path}\nwrote {json_path}")
+    if errors:
+        print(f"{len(errors)} error(s)", file=sys.stderr)
+        return 1
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

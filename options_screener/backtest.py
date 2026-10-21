@@ -1,1 +1,419 @@
-IiIiQmFja3Rlc3QgZW5naW5lIGZvciB0aGUgcHJlbWl1bS1zZWxsaW5nIHN0cmF0ZWd5IChyZXNlYXJjaCBvbmx5KS4KClNpbXVsYXRlcyB0aGUgc2NyZWVuZXIncyBjYXNoLXNlY3VyZWQtcHV0IHN0cmF0ZWd5IG92ZXIgaGlzdG9yaWNhbCBkYWlseQpjbG9zZXM6IHdlZWtseSB+MzAtZGVsdGEgc2hvcnQgcHV0cywgMzAtNDUgRFRFLCBleGl0cyBhdCA1MCUgb2YgbWF4IHByb2ZpdCwKMjEgRFRFLCBvciAyeC1wcmVtaXVtIGxvc3MuIE91dHB1dDogcGVyLXRyYWRlIGxvZyArIGFnZ3JlZ2F0ZSBzdGF0cyArCk1hcmtkb3duL0pTT04gcmVwb3J0LgoKTW9kZWwtYmFzZWQsIE5PVCBoaXN0b3JpY2FsLWNoYWluIGRhdGE6IGZyZWUgc291cmNlcyBkbyBub3QgcHVibGlzaApoaXN0b3JpY2FsIG9wdGlvbiBjaGFpbnMsIHNvIGV2ZXJ5IHByZW1pdW0gaXMgcHJpY2VkIHdpdGggQmxhY2stU2Nob2xlcwphZ2FpbnN0IGFuIElWIHByb3h5ICh0cmFpbGluZyByZWFsaXplZCB2b2wgeCBtdWx0aXBsaWVyKS4gVHJlYXQgcmVzdWx0cyBhcwppbGx1c3RyYXRpdmUgcmVzZWFyY2gsIG5ldmVyIGFzIGV4cGVjdGVkIHJldHVybnMuIFRoZSBSRUFETUUgYW5kIGV2ZXJ5CnJlcG9ydCBjYXJyeSB0aGlzIGNhdmVhdC4KClNpZ25hbHMgb25seS4gVGhpcyBtb2R1bGUgbmV2ZXIgcGxhY2VzIG9yZGVycyBhbmQgaG9sZHMgbm8gYnJva2VyCmNyZWRlbnRpYWxzLgoiIiIKCmltcG9ydCBtYXRoCgpmcm9tIC52b2wgaW1wb3J0IGJzX3B1dF9kZWx0YSwgYnNfcHV0X3ZhbHVlLCByZWFsaXplZF92b2wKCgpkZWYgc3RyaWtlX2Zvcl9kZWx0YShwcmljZSwgeWVhcnNfdG9fZXhwaXJ5LCByaXNrX2ZyZWVfcmF0ZSwgc2lnbWEsCiAgICAgICAgICAgICAgICAgICAgIHRhcmdldF9kZWx0YSwgdG9sPTFlLTQpOgogICAgIiIiRmluZCB0aGUgcHV0IHN0cmlrZSB3aG9zZSBCbGFjay1TY2hvbGVzIGRlbHRhIH49IHRhcmdldF9kZWx0YS4KCiAgICBQdXQgZGVsdGEgaXMgbW9ub3RvbmljYWxseSBkZWNyZWFzaW5nIGluIHN0cmlrZSAoaGlnaGVyIHN0cmlrZSAtPiBkZWVwZXIKICAgIGluIHRoZSBtb25leSAtPiBjbG9zZXIgdG8gLTEpLCBzbyBiaXNlY3Rpb24gb24gWzAuNSpTLCAxLjUqU10gY29udmVyZ2VzLgogICAgIiIiCiAgICBsbywgaGkgPSBwcmljZSAqIDAuNSwgcHJpY2UgKiAxLjUKICAgIGRfbG8gPSBic19wdXRfZGVsdGEocHJpY2UsIGxvLCB5ZWFyc190b19leHBpcnksIHJpc2tfZnJlZV9yYXRlLCBzaWdtYSkKICAgIGRfaGkgPSBic19wdXRfZGVsdGEocHJpY2UsIGhpLCB5ZWFyc190b19leHBpcnksIHJpc2tfZnJlZV9yYXRlLCBzaWdtYSkKICAgIGlmIG5vdCAoZF9sbyA+PSB0YXJnZXRfZGVsdGEgPj0gZF9oaSk6CiAgICAgICAgcmFpc2UgVmFsdWVFcnJvcihmInRhcmdldCBkZWx0YSB7dGFyZ2V0X2RlbHRhfSBvdXRzaWRlIGJyYWNrZXQgIgogICAgICAgICAgICAgICAgICAgICAgICAgZiJbe2RfaGk6LjNmfSwge2RfbG86LjNmfV0iKQogICAgZm9yIF8gaW4gcmFuZ2UoMTAwKToKICAgICAgICBtaWQgPSAobG8gKyBoaSkgLyAyLjAKICAgICAgICBkID0gYnNfcHV0X2RlbHRhKHByaWNlLCBtaWQsIHllYXJzX3RvX2V4cGlyeSwgcmlza19mcmVlX3JhdGUsIHNpZ21hKQogICAgICAgIGlmIGFicyhkIC0gdGFyZ2V0X2RlbHRhKSA8IHRvbDoKICAgICAgICAgICAgcmV0dXJuIG1pZAogICAgICAgIGlmIGQgPCB0YXJnZXRfZGVsdGE6ICAgIyB0b28gbmVnYXRpdmUgLT4gc3RyaWtlIHRvbyBoaWdoCiAgICAgICAgICAgIGhpID0gbWlkCiAgICAgICAgZWxzZTogICAgICAgICAgICAgICAgICAjIG5vdCBuZWdhdGl2ZSBlbm91Z2ggLT4gc3RyaWtlIHRvbyBsb3cKICAgICAgICAgICAgbG8gPSBtaWQKICAgIHJldHVybiAobG8gKyBoaSkgLyAyLjAKCgpkZWYgZXN0aW1hdGVfaXYocHJpY2VzLCBkYXksIHdpbmRvdywgbXVsdGlwbGllciwgZmFsbGJhY2spOgogICAgIiIiSVYgcHJveHkgZm9yIHNpbXVsYXRpb246IHRyYWlsaW5nIHJlYWxpemVkIHZvbCB4IG11bHRpcGxpZXIuCgogICAgUmVhbGl6ZWQgdm9sIHN5c3RlbWF0aWNhbGx5IHVuZGVyc3RhdGVzIGltcGxpZWQgdm9sICh0aGUgdmFyaWFuY2UgcmlzawogICAgcHJlbWl1bSksIGhlbmNlIHRoZSBjb25maWd1cmFibGUgbXVsdGlwbGllci4gYGZhbGxiYWNrYCBjb3ZlcnMgdGhlIGZpcnN0CiAgICBgd2luZG93YCBkYXlzIHdoZXJlIHRyYWlsaW5nIGhpc3RvcnkgaXMgdG9vIHNob3J0LgogICAgIiIiCiAgICBzZWcgPSBwcmljZXNbbWF4KDAsIGRheSAtIHdpbmRvdyk6ZGF5ICsgMV0KICAgIHJ2ID0gcmVhbGl6ZWRfdm9sKHNlZywgd2luZG93KSBpZiBsZW4oc2VnKSA+PSB3aW5kb3cgKyAxIGVsc2UgTm9uZQogICAgaWYgcnYgaXMgTm9uZSBvciBydiA8PSAwOgogICAgICAgIHJldHVybiBmYWxsYmFjawogICAgcmV0dXJuIHJ2ICogbXVsdGlwbGllcgoKCmRlZiBzaW11bGF0ZV90cmFkZShwcmljZXMsIGVudHJ5X2RheSwgZHRlLCBzaWdtYSwgY2ZnKToKICAgICIiIlNpbXVsYXRlIG9uZSBzaG9ydC1wdXQgdHJhZGUgZnJvbSBlbnRyeSB0aHJvdWdoIGl0cyBmaXJzdCBleGl0LgoKICAgIFJlcXVpcmVzIGVudHJ5X2RheSArIGR0ZSA8IGxlbihwcmljZXMpLiBSZXR1cm5zIGEgdHJhZGUgZGljdDsgcGVyLXNoYXJlCiAgICBwcmVtaXVtcyBhcmUgc2NhbGVkIHRvIGEgMS1jb250cmFjdCBwb3NpdGlvbiBpbiBgcG5sX3Blcl9jb250cmFjdGAuCiAgICAiIiIKICAgIHIgPSBjZmdbInJpc2tfZnJlZV9yYXRlIl0KICAgIHN0cmF0LCBleGl0cyA9IGNmZ1sic3RyYXRlZ3kiXSwgY2ZnWyJleGl0cyJdCiAgICBleHBpcnlfZGF5ID0gZW50cnlfZGF5ICsgZHRlCgogICAgUyA9IHByaWNlc1tlbnRyeV9kYXldCiAgICBUID0gZHRlIC8gMzY1LjAKICAgIEsgPSBzdHJpa2VfZm9yX2RlbHRhKFMsIFQsIHIsIHNpZ21hLCBzdHJhdFsidGFyZ2V0X2RlbHRhIl0pCiAgICBwcmVtaXVtID0gYnNfcHV0X3ZhbHVlKFMsIEssIFQsIHIsIHNpZ21hKSAgIyBwZXIgc2hhcmUgcmVjZWl2ZWQKICAgIGVudHJ5X2RlbHRhID0gYnNfcHV0X2RlbHRhKFMsIEssIFQsIHIsIHNpZ21hKQoKICAgIHByb2ZpdF90cmlnZ2VyID0gcHJlbWl1bSAqICgxIC0gZXhpdHNbInByb2ZpdF90YXJnZXRfcGN0Il0pCiAgICBsb3NzX3RyaWdnZXIgPSBwcmVtaXVtICogKDEgKyBleGl0c1sibG9zc19tYW5hZ2VfbXVsdGlwbGUiXSkKCiAgICByZWFzb24sIGV4aXRfZGF5LCBleGl0X3ZhbHVlID0gImV4cGlyZWQiLCBleHBpcnlfZGF5LCBOb25lCiAgICBmb3IgaiBpbiByYW5nZShlbnRyeV9kYXkgKyAxLCBleHBpcnlfZGF5ICsgMSk6CiAgICAgICAgdF9yZW0gPSAoZXhwaXJ5X2RheSAtIGopIC8gMzY1LjAKICAgICAgICBWID0gYnNfcHV0X3ZhbHVlKHByaWNlc1tqXSwgSywgdF9yZW0sIHIsIHNpZ21hKQogICAgICAgIGlmIFYgPD0gcHJvZml0X3RyaWdnZXI6CiAgICAgICAgICAgIHJlYXNvbiwgZXhpdF9kYXksIGV4aXRfdmFsdWUgPSAicHJvZml0IiwgaiwgVgogICAgICAgICAgICBicmVhawogICAgICAgIGlmIGogPCBleHBpcnlfZGF5IGFuZCAoZXhwaXJ5X2RheSAtIGopIDw9IGV4aXRzWyJtYW5hZ2VfZHRlIl06CiAgICAgICAgICAgIHJlYXNvbiwgZXhpdF9kYXksIGV4aXRfdmFsdWUgPSAidGltZSIsIGosIFYKICAgICAgICAgICAgYnJlYWsKICAgICAgICBpZiBqIDwgZXhwaXJ5X2RheSBhbmQgViA+PSBsb3NzX3RyaWdnZXI6CiAgICAgICAgICAgIHJlYXNvbiwgZXhpdF9kYXksIGV4aXRfdmFsdWUgPSAibG9zcyIsIGosIFYKICAgICAgICAgICAgYnJlYWsKICAgIGlmIGV4aXRfdmFsdWUgaXMgTm9uZTogICMgaGVsZCB0byBleHBpcnk6IHZhbHVlID0gaW50cmluc2ljCiAgICAgICAgZXhpdF92YWx1ZSA9IG1heChLIC0gcHJpY2VzW2V4cGlyeV9kYXldLCAwLjApCgogICAgcG5sX3Blcl9zaGFyZSA9IHByZW1pdW0gLSBleGl0X3ZhbHVlCiAgICByZXR1cm4gewogICAgICAgICJlbnRyeV9kYXkiOiBlbnRyeV9kYXksCiAgICAgICAgImV4aXRfZGF5IjogZXhpdF9kYXksCiAgICAgICAgImRheXNfaGVsZCI6IGV4aXRfZGF5IC0gZW50cnlfZGF5LAogICAgICAgICJlbnRyeV9wcmljZSI6IHJvdW5kKFMsIDIpLAogICAgICAgICJzdHJpa2UiOiByb3VuZChLLCAyKSwKICAgICAgICAiZHRlIjogZHRlLAogICAgICAgICJpdiI6IHJvdW5kKHNpZ21hLCA0KSwKICAgICAgICAiZGVsdGEiOiByb3VuZChlbnRyeV9kZWx0YSwgMyksCiAgICAgICAgInByZW1pdW1fcGVyX3NoYXJlIjogcm91bmQocHJlbWl1bSwgMyksCiAgICAgICAgImV4aXRfcmVhc29uIjogcmVhc29uLAogICAgICAgICJleGl0X3ZhbHVlX3Blcl9zaGFyZSI6IHJvdW5kKGV4aXRfdmFsdWUsIDMpLAogICAgICAgICJwbmxfcGVyX2NvbnRyYWN0Ijogcm91bmQocG5sX3Blcl9zaGFyZSAqIDEwMCwgMiksCiAgICAgICAgIyBwZXItY29udHJhY3QgcmV0dXJuIG9uIGNhc2gtc2VjdXJlZCBjYXBpdGFsIChzdHJpa2UgeCAxMDApCiAgICAgICAgInJldHVybl9vbl9yaXNrIjogcm91bmQocG5sX3Blcl9zaGFyZSAvIEssIDQpLAogICAgICAgICJhc3NpZ25lZCI6IGJvb2wocmVhc29uID09ICJleHBpcmVkIiBhbmQgZXhpdF92YWx1ZSA+IDApLAogICAgfQoKCmRlZiBzaW11bGF0ZShwcmljZXMsIGNmZyk6CiAgICAiIiJSdW4gdGhlIHN0cmF0ZWd5IG92ZXIgYSBwcmljZSBzZXJpZXMuIFJldHVybnMgYSBsaXN0IG9mIHRyYWRlIGRpY3RzLgoKICAgIEVudHJpZXMgYXJlIGF0dGVtcHRlZCBldmVyeSBgZW50cnlfaW50ZXJ2YWxfZGF5c2AgdHJhZGluZyBkYXlzIChvbmUKICAgIHBvc2l0aW9uIGF0IGEgdGltZSksIGVhY2ggbmVlZGluZyBgZW50cnlfZHRlYCBvZiBmdXR1cmUgZGF0YSB0byByZXNvbHZlLgogICAgVHJhZGVzIHRoYXQgY2Fubm90IGNvbXBsZXRlIGFyZSBuZXZlciBvcGVuZWQuCiAgICAiIiIKICAgIGJ0ID0gY2ZnWyJiYWNrdGVzdCJdCiAgICBkdGUgPSBidC5nZXQoImVudHJ5X2R0ZSIpIG9yIChjZmdbInN0cmF0ZWd5Il1bImR0ZV9taW4iXQogICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICAgKyBjZmdbInN0cmF0ZWd5Il1bImR0ZV9tYXgiXSkgLy8gMgogICAgd2luZG93LCBpbnRlcnZhbCA9IGJ0WyJpdl93aW5kb3ciXSwgYnRbImVudHJ5X2ludGVydmFsX2RheXMiXQogICAgbiA9IGxlbihwcmljZXMpCgogICAgdHJhZGVzID0gW10KICAgIGRheSA9IHdpbmRvdyAgIyBmaXJzdCBlbnRyeSBuZWVkcyB0cmFpbGluZyBoaXN0b3J5IGZvciB0aGUgSVYgcHJveHkKICAgIHdoaWxlIGRheSArIGR0ZSA8IG46CiAgICAgICAgc2lnbWEgPSBlc3RpbWF0ZV9pdihwcmljZXMsIGRheSwgd2luZG93LAogICAgICAgICAgICAgICAgICAgICAgICAgICAgYnRbIml2X211bHRpcGxpZXIiXSwgYnRbIml2X2ZhbGxiYWNrIl0pCiAgICAgICAgdHJhZGUgPSBzaW11bGF0ZV90cmFkZShwcmljZXMsIGRheSwgZHRlLCBzaWdtYSwgY2ZnKQogICAgICAgIHRyYWRlcy5hcHBlbmQodHJhZGUpCiAgICAgICAgZGF5ID0gbWF4KHRyYWRlWyJleGl0X2RheSJdICsgMSwgZGF5ICsgaW50ZXJ2YWwpCiAgICByZXR1cm4gdHJhZGVzCgoKZGVmIHN1bW1hcml6ZSh0cmFkZXMpOgogICAgIiIiQWdncmVnYXRlIHN0YXRzIG92ZXIgYSB0cmFkZSBsaXN0LiBSZXR1cm5zIGEgSlNPTi1zZXJpYWxpemFibGUgZGljdC4iIiIKICAgIG4gPSBsZW4odHJhZGVzKQogICAgcG5scyA9IFt0WyJwbmxfcGVyX2NvbnRyYWN0Il0gZm9yIHQgaW4gdHJhZGVzXQogICAgdG90YWwgPSBzdW0ocG5scykKICAgIHdpbnMgPSBzdW0oMSBmb3IgcCBpbiBwbmxzIGlmIHAgPiAwKQoKICAgICMgZXF1aXR5IGN1cnZlICsgbWF4IGRyYXdkb3duIChwZXItY29udHJhY3QgY3VtdWxhdGl2ZSBQJkwpCiAgICBlcXVpdHksIHBlYWssIG1heF9kZCA9IDAuMCwgMC4wLCAwLjAKICAgIGZvciBwIGluIHBubHM6CiAgICAgICAgZXF1aXR5ICs9IHAKICAgICAgICBwZWFrID0gbWF4KHBlYWssIGVxdWl0eSkKICAgICAgICBtYXhfZGQgPSBtYXgobWF4X2RkLCBwZWFrIC0gZXF1aXR5KQoKICAgIGV4aXRzID0ge30KICAgIGZvciB0IGluIHRyYWRlczoKICAgICAgICBleGl0c1t0WyJleGl0X3JlYXNvbiJdXSA9IGV4aXRzLmdldCh0WyJleGl0X3JlYXNvbiJdLCAwKSArIDEKCiAgICByZXR1cm4gewogICAgICAgICJ0cmFkZXMiOiBuLAogICAgICAgICJ3aW5zIjogd2lucywKICAgICAgICAid2luX3JhdGUiOiByb3VuZCh3aW5zIC8gbiwgNCkgaWYgbiBlbHNlIE5vbmUsCiAgICAgICAgInRvdGFsX3BubCI6IHJvdW5kKHRvdGFsLCAyKSwKICAgICAgICAiYXZnX3BubF9wZXJfdHJhZGUiOiByb3VuZCh0b3RhbCAvIG4sIDIpIGlmIG4gZWxzZSBOb25lLAogICAgICAgICJhdmdfcmV0dXJuX29uX3Jpc2siOiAocm91bmQoc3VtKHRbInJldHVybl9vbl9yaXNrIl0gZm9yIHQgaW4gdHJhZGVzKSAvIG4sIDQpCiAgICAgICAgICAgICAgICAgICAgICAgICAgICAgICBpZiBuIGVsc2UgTm9uZSksCiAgICAgICAgImJlc3RfdHJhZGUiOiByb3VuZChtYXgocG5scyksIDIpIGlmIG4gZWxzZSBOb25lLAogICAgICAgICJ3b3JzdF90cmFkZSI6IHJvdW5kKG1pbihwbmxzKSwgMikgaWYgbiBlbHNlIE5vbmUsCiAgICAgICAgImF2Z19kYXlzX2hlbGQiOiAocm91bmQoc3VtKHRbImRheXNfaGVsZCJdIGZvciB0IGluIHRyYWRlcykgLyBuLCAxKQogICAgICAgICAgICAgICAgICAgICAgICAgIGlmIG4gZWxzZSBOb25lKSwKICAgICAgICAibWF4X2RyYXdkb3duIjogcm91bmQobWF4X2RkLCAyKSwKICAgICAgICAiZXhpdHMiOiBleGl0cywKICAgIH0KCgpBU1NVTVBUSU9OUyA9IFsKICAgICJNb2RlbC1iYXNlZCBiYWNrdGVzdDogcHJlbWl1bXMgcHJpY2VkIHdpdGggQmxhY2stU2Nob2xlcywgbm90IGZyb20gIgogICAgImhpc3RvcmljYWwgb3B0aW9uIGNoYWlucyAobm8gZnJlZSBzb3VyY2UgcHVibGlzaGVzIHRoZW0pLiIsCiAgICAiSVYgaGVsZCBjb25zdGFudCBwZXIgdHJhZGU6IGVudHJ5IElWIHByb3h5ID0gdHJhaWxpbmcgMjAtZGF5IHJlYWxpemVkICIKICAgICJ2b2wgeCAxLjE1OyBubyB2b2xhdGlsaXR5IHNob2NrcyBtaWQtdHJhZGUuIiwKICAgICJFdXJvcGVhbiBleGVyY2lzZSwgbm8gZWFybHkgYXNzaWdubWVudDsgbm8gZGl2aWRlbmRzLiIsCiAgICAiTm8gY29tbWlzc2lvbnMsIGZlZXMsIG9yIHNsaXBwYWdlOyBmaWxscyBhdCBtb2RlbCBtaWQuIiwKICAgICJPbmUgcG9zaXRpb24gYXQgYSB0aW1lIHBlciB0aWNrZXI7IGVudHJpZXMgZXZlcnkgNSB0cmFkaW5nIGRheXMuIiwKICAgICJJbmNvbXBsZXRlIHRyYWRlcyAobm90IGVub3VnaCBmdXR1cmUgZGF0YSkgYXJlIG5ldmVyIG9wZW5lZC4iLApdCgoKZGVmIGJ1aWxkX2JhY2t0ZXN0X3BheWxvYWQocmVzdWx0cywgY2ZnKToKICAgICIiInJlc3VsdHM6IHt0aWNrZXI6IHsndHJhZGVzJzogWy4uLl0sICdzdW1tYXJ5Jzogey4uLn19fSAtPiByZXBvcnQgcGF5bG9hZC4iIiIKICAgIHJldHVybiB7CiAgICAgICAgInN0cmF0ZWd5IjogImNhc2gtc2VjdXJlZCBwdXRzOiB+MzAgZGVsdGEsICIKICAgICAgICAgICAgICAgICAgICBmIntjZmdbJ2JhY2t0ZXN0J10uZ2V0KCdlbnRyeV9kdGUnKSBvciAnbWlkLWJhbmQnfSBEVEUiLAogICAgICAgICJhc3N1bXB0aW9ucyI6IEFTU1VNUFRJT05TLAogICAgICAgICJ0aWNrZXJzIjogcmVzdWx0cywKICAgIH0KCgpkZWYgcmVuZGVyX2JhY2t0ZXN0X21hcmtkb3duKHBheWxvYWQpOgogICAgIiIiSHVtYW4tcmVhZGFibGUgYmFja3Rlc3QgcmVwb3J0LiIiIgogICAgbGluZXMgPSBbIiMgT3B0aW9ucyBTY3JlZW5lciDigJQgU3RyYXRlZ3kgQmFja3Rlc3QgKHJlc2VhcmNoIG9ubHkpIiwKICAgICAgICAgICAgICIiLAogICAgICAgICAgICAgIj4gKipNb2RlbC1iYXNlZCBzaW11bGF0aW9uLioqIFByZW1pdW1zIGFyZSBwcmljZWQgd2l0aCAiCiAgICAgICAgICAgICAiQmxhY2stU2Nob2xlcyBhZ2FpbnN0IGFuIElWIHByb3h5ICh0cmFpbGluZyByZWFsaXplZCB2b2wgeCAiCiAgICAgICAgICAgICAiMS4xNSkg4oCUIHRoaXMgaXMgTk9UIGhpc3RvcmljYWwgb3B0aW9uLWNoYWluIGRhdGEuIFJlc3VsdHMgYXJlICIKICAgICAgICAgICAgICJpbGx1c3RyYXRpdmUgcmVzZWFyY2gsIG5vdCBleHBlY3RlZCByZXR1cm5zLiBTZWUgQXNzdW1wdGlvbnMuIiwKICAgICAgICAgICAgICIiXQogICAgbGluZXMuYXBwZW5kKGYiKipTdHJhdGVneToqKiB7cGF5bG9hZFsnc3RyYXRlZ3knXX0iKQogICAgbGluZXMuYXBwZW5kKCIiKQogICAgbGluZXMuYXBwZW5kKCIjIyBSZXN1bHRzIGJ5IHRpY2tlciIpCiAgICBsaW5lcy5hcHBlbmQoIiIpCiAgICBsaW5lcy5hcHBlbmQoInwgVGlja2VyIHwgVHJhZGVzIHwgV2luIHJhdGUgfCBUb3RhbCBQJkwgfCBBdmcvdHJhZGUgfCAiCiAgICAgICAgICAgICAgICAgIkF2ZyBSb1IgfCBNYXggREQgfCBBdmcgZGF5cyB8IikKICAgIGxpbmVzLmFwcGVuZCgifC0tLS0tLS0tfC0tLS0tLS0tfC0tLS0tLS0tLS18LS0tLS0tLS0tLS18LS0tLS0tLS0tLS18LS0tLS0tLS0tfCIKICAgICAgICAgICAgICAgICAiLS0tLS0tLS18LS0tLS0tLS0tLXwiKQogICAgZm9yIHRpY2tlciwgcmVzIGluIHBheWxvYWRbInRpY2tlcnMiXS5pdGVtcygpOgogICAgICAgIHMgPSByZXNbInN1bW1hcnkiXQogICAgICAgIGlmIHNbInRyYWRlcyJdID09IDA6CiAgICAgICAgICAgIGxpbmVzLmFwcGVuZChmInwge3RpY2tlcn0gfCAwIHwg4oCUIHwg4oCUIHwg4oCUIHwg4oCUIHwg4oCUIHwg4oCUIHwiKQogICAgICAgICAgICBjb250aW51ZQogICAgICAgIGxpbmVzLmFwcGVuZCgKICAgICAgICAgICAgZiJ8IHt0aWNrZXJ9IHwge3NbJ3RyYWRlcyddfSB8IHtzWyd3aW5fcmF0ZSddOi4xJX0gfCAiCiAgICAgICAgICAgIGYiJHtzWyd0b3RhbF9wbmwnXTosLjJmfSB8ICR7c1snYXZnX3BubF9wZXJfdHJhZGUnXTosLjJmfSB8ICIKICAgICAgICAgICAgZiJ7c1snYXZnX3JldHVybl9vbl9yaXNrJ106LjIlfSB8ICR7c1snbWF4X2RyYXdkb3duJ106LC4yZn0gfCAiCiAgICAgICAgICAgIGYie3NbJ2F2Z19kYXlzX2hlbGQnXTouMGZ9IHwiKQogICAgZm9yIHRpY2tlciwgcmVzIGluIHBheWxvYWRbInRpY2tlcnMiXS5pdGVtcygpOgogICAgICAgIHMgPSByZXNbInN1bW1hcnkiXQogICAgICAgIGlmIHNbInRyYWRlcyJdID09IDA6CiAgICAgICAgICAgIGNvbnRpbnVlCiAgICAgICAgbGluZXMuYXBwZW5kKCIiKQogICAgICAgIGxpbmVzLmFwcGVuZChmIiMjIHt0aWNrZXJ9IOKAlCB0cmFkZSBsb2ciKQogICAgICAgIGxpbmVzLmFwcGVuZCgiIikKICAgICAgICBsaW5lcy5hcHBlbmQoInwgIyB8IEVudHJ5IHwgU3RyaWtlIHwgzpQgfCBQcmVtIHwgRXhpdCB8IERheXMgfCBQJkwgfCBSb1IgfCIpCiAgICAgICAgbGluZXMuYXBwZW5kKCJ8LS0tfC0tLS0tLS18LS0tLS0tLS18LS0tfC0tLS0tLXwtLS0tLS18LS0tLS0tfC0tLS0tfC0tLS0tfCIpCiAgICAgICAgZm9yIGksIHQgaW4gZW51bWVyYXRlKHJlc1sidHJhZGVzIl0sIDEpOgogICAgICAgICAgICBsaW5lcy5hcHBlbmQoCiAgICAgICAgICAgICAgICBmInwge2l9IHwgZGF5IHt0WydlbnRyeV9kYXknXX0gQCAke3RbJ2VudHJ5X3ByaWNlJ106LjJmfSB8ICIKICAgICAgICAgICAgICAgIGYiJHt0WydzdHJpa2UnXTouMmZ9IHwge3RbJ2RlbHRhJ106LjJmfSB8ICIKICAgICAgICAgICAgICAgIGYiJHt0WydwcmVtaXVtX3Blcl9zaGFyZSddOi4yZn0gfCB7dFsnZXhpdF9yZWFzb24nXX0gfCAiCiAgICAgICAgICAgICAgICBmInt0WydkYXlzX2hlbGQnXX0gfCAke3RbJ3BubF9wZXJfY29udHJhY3QnXTorLjJmfSB8ICIKICAgICAgICAgICAgICAgIGYie3RbJ3JldHVybl9vbl9yaXNrJ106Ky4yJX0gfCIpCiAgICAgICAgbGluZXMuYXBwZW5kKCIiKQogICAgICAgIGV4aXRzID0gIiwgIi5qb2luKGYie2t9OiB7dn0iIGZvciBrLCB2IGluIHNbImV4aXRzIl0uaXRlbXMoKSkKICAgICAgICBsaW5lcy5hcHBlbmQoZiJFeGl0cyDigJQge2V4aXRzfS4gIgogICAgICAgICAgICAgICAgICAgICBmIkJlc3QgJHtzWydiZXN0X3RyYWRlJ106Ky4yZn0sIHdvcnN0ICR7c1snd29yc3RfdHJhZGUnXTorLjJmfS4iKQogICAgbGluZXMuYXBwZW5kKCIiKQogICAgbGluZXMuYXBwZW5kKCIjIyBBc3N1bXB0aW9ucyAmIGxpbWl0YXRpb25zIikKICAgIGxpbmVzLmFwcGVuZCgiIikKICAgIGZvciBhIGluIHBheWxvYWRbImFzc3VtcHRpb25zIl06CiAgICAgICAgbGluZXMuYXBwZW5kKGYiLSB7YX0iKQogICAgbGluZXMuYXBwZW5kKCIiKQogICAgbGluZXMuYXBwZW5kKCJfRWR1Y2F0aW9uYWwgcmVzZWFyY2ggdG9vbCwgbm90IGZpbmFuY2lhbCBhZHZpY2UuIE9wdGlvbnMgIgogICAgICAgICAgICAgICAgICJpbnZvbHZlIHN1YnN0YW50aWFsIHJpc2sgb2YgbG9zczsgcGFwZXItdHJhZGUgYmVmb3JlICIKICAgICAgICAgICAgICAgICAicmlza2luZyBjYXBpdGFsLl8iKQogICAgbGluZXMuYXBwZW5kKCIiKQogICAgcmV0dXJuICJcbiIuam9pbihsaW5lcykK
+"""Backtest engine for the premium-selling strategy (research only).
+
+Simulates the screener's cash-secured-put strategy over historical daily
+closes: weekly ~30-delta short puts, 30-45 DTE, exits at 50% of max profit,
+21 DTE, or 2x-premium loss. Output: per-trade log + aggregate stats +
+Markdown/JSON report.
+
+Model-based, NOT historical-chain data: free sources do not publish
+historical option chains, so every premium is priced with Black-Scholes
+against an IV proxy (trailing realized vol x multiplier). Treat results as
+illustrative research, never as expected returns. The README and every
+report carry this caveat.
+
+Signals only. This module never places orders and holds no broker
+credentials.
+"""
+
+import math
+
+from .vol import bs_put_delta, bs_put_value, realized_vol
+
+
+def strike_for_delta(price, years_to_expiry, risk_free_rate, sigma,
+                     target_delta, tol=1e-4):
+    """Find the put strike whose Black-Scholes delta ~= target_delta.
+
+    Put delta is monotonically decreasing in strike (higher strike -> deeper
+    in the money -> closer to -1), so bisection on [0.5*S, 1.5*S] converges.
+    """
+    lo, hi = price * 0.5, price * 1.5
+    d_lo = bs_put_delta(price, lo, years_to_expiry, risk_free_rate, sigma)
+    d_hi = bs_put_delta(price, hi, years_to_expiry, risk_free_rate, sigma)
+    if not (d_lo >= target_delta >= d_hi):
+        raise ValueError(f"target delta {target_delta} outside bracket "
+                         f"[{d_hi:.3f}, {d_lo:.3f}]")
+    for _ in range(100):
+        mid = (lo + hi) / 2.0
+        d = bs_put_delta(price, mid, years_to_expiry, risk_free_rate, sigma)
+        if abs(d - target_delta) < tol:
+            return mid
+        if d < target_delta:   # too negative -> strike too high
+            hi = mid
+        else:                  # not negative enough -> strike too low
+            lo = mid
+    return (lo + hi) / 2.0
+
+
+def estimate_iv(prices, day, window, multiplier, fallback):
+    """IV proxy for simulation: trailing realized vol x multiplier.
+
+    Realized vol systematically understates implied vol (the variance risk
+    premium), hence the configurable multiplier. `fallback` covers the first
+    `window` days where trailing history is too short.
+    """
+    seg = prices[max(0, day - window):day + 1]
+    rv = realized_vol(seg, window) if len(seg) >= window + 1 else None
+    if rv is None or rv <= 0:
+        return fallback
+    return rv * multiplier
+
+
+def simulate_trade(prices, entry_day, dte, sigma, cfg, exits=None):
+    """Simulate one short-put trade from entry through its first exit.
+
+    Requires entry_day + dte < len(prices). Returns a trade dict; per-share
+    premiums are scaled to a 1-contract position in `pnl_per_contract`.
+    `exits` optionally overrides cfg["exits"] (used by the sensitivity
+    sweep); the caller's cfg dict is never mutated.
+    """
+    r = cfg["risk_free_rate"]
+    strat = cfg["strategy"]
+    ex = dict(cfg["exits"])
+    if exits:
+        ex.update(exits)
+    expiry_day = entry_day + dte
+
+    S = prices[entry_day]
+    T = dte / 365.0
+    K = strike_for_delta(S, T, r, sigma, strat["target_delta"])
+    premium = bs_put_value(S, K, T, r, sigma)  # per share received
+    entry_delta = bs_put_delta(S, K, T, r, sigma)
+
+    profit_trigger = premium * (1 - ex["profit_target_pct"])
+    loss_trigger = premium * (1 + ex["loss_manage_multiple"])
+
+    reason, exit_day, exit_value = "expired", expiry_day, None
+    for j in range(entry_day + 1, expiry_day + 1):
+        t_rem = (expiry_day - j) / 365.0
+        V = bs_put_value(prices[j], K, t_rem, r, sigma)
+        if V <= profit_trigger:
+            reason, exit_day, exit_value = "profit", j, V
+            break
+        if j < expiry_day and (expiry_day - j) <= ex["manage_dte"]:
+            reason, exit_day, exit_value = "time", j, V
+            break
+        if j < expiry_day and V >= loss_trigger:
+            reason, exit_day, exit_value = "loss", j, V
+            break
+    if exit_value is None:  # held to expiry: value = intrinsic
+        exit_value = max(K - prices[expiry_day], 0.0)
+
+    pnl_per_share = premium - exit_value
+    return {
+        "entry_day": entry_day,
+        "exit_day": exit_day,
+        "days_held": exit_day - entry_day,
+        "entry_price": round(S, 2),
+        "strike": round(K, 2),
+        "dte": dte,
+        "iv": round(sigma, 4),
+        "delta": round(entry_delta, 3),
+        "premium_per_share": round(premium, 3),
+        "exit_reason": reason,
+        "exit_value_per_share": round(exit_value, 3),
+        "pnl_per_contract": round(pnl_per_share * 100, 2),
+        # per-contract return on cash-secured capital (strike x 100)
+        "return_on_risk": round(pnl_per_share / K, 4),
+        "assigned": bool(reason == "expired" and exit_value > 0),
+    }
+
+
+def simulate(prices, cfg, exits=None):
+    """Run the strategy over a price series. Returns a list of trade dicts.
+
+    Entries are attempted every `entry_interval_days` trading days (one
+    position at a time), each needing `entry_dte` of future data to resolve.
+    Trades that cannot complete are never opened. `exits` overrides the exit
+    rules from config (sensitivity sweep), without mutating cfg.
+    """
+    bt = cfg["backtest"]
+    dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
+                                  + cfg["strategy"]["dte_max"]) // 2
+    window, interval = bt["iv_window"], bt["entry_interval_days"]
+    n = len(prices)
+
+    trades = []
+    day = window  # first entry needs trailing history for the IV proxy
+    while day + dte < n:
+        sigma = estimate_iv(prices, day, window,
+                            bt["iv_multiplier"], bt["iv_fallback"])
+        trade = simulate_trade(prices, day, dte, sigma, cfg, exits=exits)
+        trades.append(trade)
+        day = max(trade["exit_day"] + 1, day + interval)
+    return trades
+
+
+def summarize(trades):
+    """Aggregate stats over a trade list. Returns a JSON-serializable dict."""
+    n = len(trades)
+    pnls = [t["pnl_per_contract"] for t in trades]
+    total = sum(pnls)
+    wins = sum(1 for p in pnls if p > 0)
+
+    # equity curve + max drawdown (per-contract cumulative P&L)
+    equity, peak, max_dd = 0.0, 0.0, 0.0
+    for p in pnls:
+        equity += p
+        peak = max(peak, equity)
+        max_dd = max(max_dd, peak - equity)
+
+    exits = {}
+    for t in trades:
+        exits[t["exit_reason"]] = exits.get(t["exit_reason"], 0) + 1
+
+    return {
+        "trades": n,
+        "wins": wins,
+        "win_rate": round(wins / n, 4) if n else None,
+        "total_pnl": round(total, 2),
+        "avg_pnl_per_trade": round(total / n, 2) if n else None,
+        "avg_return_on_risk": (round(sum(t["return_on_risk"] for t in trades) / n, 4)
+                               if n else None),
+        "best_trade": round(max(pnls), 2) if n else None,
+        "worst_trade": round(min(pnls), 2) if n else None,
+        "avg_days_held": (round(sum(t["days_held"] for t in trades) / n, 1)
+                          if n else None),
+        "max_drawdown": round(max_dd, 2),
+        "exits": exits,
+    }
+
+
+ASSUMPTIONS = [
+    "Model-based backtest: premiums priced with Black-Scholes, not from "
+    "historical option chains (no free source publishes them).",
+    "IV held constant per trade: entry IV proxy = trailing 20-day realized "
+    "vol x 1.15; no volatility shocks mid-trade.",
+    "European exercise, no early assignment; no dividends.",
+    "No commissions, fees, or slippage; fills at model mid.",
+    "One position at a time per ticker; entries every 5 trading days.",
+    "Incomplete trades (not enough future data) are never opened.",
+]
+
+
+def build_backtest_payload(results, cfg):
+    """results: {ticker: {'trades': [...], 'summary': {...}}} -> report payload."""
+    return {
+        "strategy": "cash-secured puts: ~30 delta, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS,
+        "tickers": results,
+    }
+
+
+def render_backtest_markdown(payload):
+    """Human-readable backtest report."""
+    lines = ["# Options Screener — Strategy Backtest (research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy (trailing realized vol x "
+             "1.15) — this is NOT historical option-chain data. Results are "
+             "illustrative research, not expected returns. See Assumptions.",
+             ""]
+    lines.append(f"**Strategy:** {payload['strategy']}")
+    lines.append("")
+    lines.append("## Results by ticker")
+    lines.append("")
+    lines.append("| Ticker | Trades | Win rate | Total P&L | Avg/trade | "
+                 "Avg RoR | Max DD | Avg days |")
+    lines.append("|--------|--------|----------|-----------|-----------|---------|"
+                 "--------|----------|")
+    for ticker, res in payload["tickers"].items():
+        s = res["summary"]
+        if s["trades"] == 0:
+            lines.append(f"| {ticker} | 0 | — | — | — | — | — | — |")
+            continue
+        lines.append(
+            f"| {ticker} | {s['trades']} | {s['win_rate']:.1%} | "
+            f"${s['total_pnl']:,.2f} | ${s['avg_pnl_per_trade']:,.2f} | "
+            f"{s['avg_return_on_risk']:.2%} | ${s['max_drawdown']:,.2f} | "
+            f"{s['avg_days_held']:.0f} |")
+    for ticker, res in payload["tickers"].items():
+        s = res["summary"]
+        if s["trades"] == 0:
+            continue
+        lines.append("")
+        lines.append(f"## {ticker} — trade log")
+        lines.append("")
+        lines.append("| # | Entry | Strike | Δ | Prem | Exit | Days | P&L | RoR |")
+        lines.append("|---|-------|--------|---|------|------|------|-----|-----|")
+        for i, t in enumerate(res["trades"], 1):
+            lines.append(
+                f"| {i} | day {t['entry_day']} @ ${t['entry_price']:.2f} | "
+                f"${t['strike']:.2f} | {t['delta']:.2f} | "
+                f"${t['premium_per_share']:.2f} | {t['exit_reason']} | "
+                f"{t['days_held']} | ${t['pnl_per_contract']:+.2f} | "
+                f"{t['return_on_risk']:+.2%} |")
+        lines.append("")
+        exits = ", ".join(f"{k}: {v}" for k, v in s["exits"].items())
+        lines.append(f"Exits — {exits}. "
+                     f"Best ${s['best_trade']:+.2f}, worst ${s['worst_trade']:+.2f}.")
+    lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Exit-rule sensitivity sweep (v5)
+#
+# The screener's mechanical exit rules (profit target / loss multiple /
+# manage-DTE) are config values, not validated truths. The sweep re-runs the
+# same simulation over a grid of those rules and ranks the outcomes, so the
+# report can answer: is the default combo near the top (robust), or does
+# performance collapse one notch away (fragile/overfit)?
+#
+# Model-based like the rest of the backtester: Black-Scholes premiums
+# against the trailing-realized-vol IV proxy, no commissions/slippage.
+# Signals only — never places orders, holds no broker credentials.
+# ---------------------------------------------------------------------------
+
+DEFAULT_SWEEP_GRID = {
+    "profit_targets": [0.25, 0.50, 0.75],   # close at this fraction of max profit
+    "loss_multiples": [1.5, 2.0, 3.0],      # manage when cost-to-close hits this x premium
+    "manage_dtes": [14, 21],                # exit/roll at this DTE
+}
+
+
+def sweep_key(pt, lm, md):
+    """Human + JSON-friendly key for one exit-rule combo."""
+    return f"profit={pt:.2f},loss={lm:.1f}x,dte={md}"
+
+
+def default_sweep_key(cfg):
+    """The combo matching the config's current exit rules."""
+    ex = cfg["exits"]
+    return sweep_key(ex["profit_target_pct"], ex["loss_manage_multiple"],
+                     ex["manage_dte"])
+
+
+def sweep_exit_rules(prices, cfg, grid):
+    """Run the simulation over every exit-rule combo in `grid`.
+
+    Returns {sweep_key: {"trades": [...], "summary": {...}}}. The config's
+    own exits dict is never mutated by overrides.
+    """
+    out = {}
+    for pt in grid["profit_targets"]:
+        for lm in grid["loss_multiples"]:
+            for md in grid["manage_dtes"]:
+                ov = {"profit_target_pct": pt, "loss_manage_multiple": lm,
+                      "manage_dte": md}
+                trades = simulate(prices, cfg, exits=ov)
+                out[sweep_key(pt, lm, md)] = {
+                    "trades": trades,
+                    "summary": summarize(trades),
+                    "rules": {"profit_target_pct": pt,
+                              "loss_manage_multiple": lm, "manage_dte": md},
+                }
+    return out
+
+
+def rank_sweep(sweep_results, default_key):
+    """Rank combos by total P&L, flagging the config default.
+
+    Returns a list of rows sorted by total_pnl desc, each with
+    `delta_vs_default` (combo P&L minus default-combo P&L).
+    """
+    default_total = sweep_results[default_key]["summary"]["total_pnl"]
+    rows = []
+    for key, res in sweep_results.items():
+        s = res["summary"]
+        rows.append({
+            "key": key,
+            "rules": res["rules"],
+            "summary": s,
+            "is_default": key == default_key,
+            "delta_vs_default": round(s["total_pnl"] - default_total, 2),
+        })
+    rows.sort(key=lambda r: r["summary"]["total_pnl"], reverse=True)
+    for i, r in enumerate(rows, 1):
+        r["rank"] = i
+    return rows
+
+
+def build_sweep_payload(sweeps, cfg, grid):
+    """sweeps: {ticker: ranked rows} -> JSON-serializable report payload."""
+    return {
+        "mode": "exit-rule sensitivity sweep",
+        "grid": grid,
+        "strategy": "cash-secured puts: ~30 delta, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "Sweep varies ONLY the exit rules (profit target, loss "
+            "multiple, manage DTE); entries, strikes, IV proxy and all "
+            "other mechanics are identical across combos.",
+            "Rankings are by model total P&L and are not expected returns; "
+            "use them to check robustness (default near the top, smooth "
+            "neighbors), not to pick a 'winner'.",
+        ],
+        "tickers": sweeps,
+    }
+
+
+def _sweep_row_md(row):
+    s = row["summary"]
+    mark = " ★ default" if row["is_default"] else ""
+    if s["trades"] == 0:
+        return (f"| {row['rank']} | `{row['key']}` | 0 | — | — | — | — | — |"
+                f"{mark} |")
+    return (f"| {row['rank']} | `{row['key']}` | {s['trades']} | "
+            f"{s['win_rate']:.1%} | ${s['total_pnl']:+,.2f} | "
+            f"${row['delta_vs_default']:+,.2f} | ${s['worst_trade']:+,.2f} | "
+            f"${s['max_drawdown']:,.2f} | {s['avg_days_held']:.0f}{mark} |")
+
+
+def render_sweep_markdown(payload):
+    """Human-readable sweep report."""
+    lines = ["# Options Screener — Exit-Rule Sensitivity Sweep (research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy (trailing realized vol x "
+             "1.15) — this is NOT historical option-chain data. The sweep "
+             "answers one question: are the config's exit rules robust, or "
+             "does performance hinge on them?",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             ""]
+    for ticker, rows in payload["tickers"].items():
+        lines.append(f"## {ticker}")
+        lines.append("")
+        lines.append("| Rank | Exit rules | Trades | Win rate | Total P&L | "
+                     "Δ vs default | Worst | Max DD | Avg days |")
+        lines.append("|------|------------|--------|----------|-----------|"
+                     "--------------|-------|--------|----------|")
+        for row in rows:
+            lines.append(_sweep_row_md(row))
+        best, default_rows = rows[0], [r for r in rows if r["is_default"]]
+        lines.append("")
+        lines.append(f"Best: `{best['key']}` at "
+                     f"${best['summary']['total_pnl']:+,.2f} total. "
+                     f"Default (`{default_rows[0]['key']}`) ranks "
+                     f"#{default_rows[0]['rank']} of {len(rows)} "
+                     f"(${default_rows[0]['summary']['total_pnl']:+,.2f}).")
+        lines.append("")
+    lines.append("## How to read this")
+    lines.append("")
+    lines.append("- Default near the top with smooth neighbors → the rules "
+                 "are robust, not overfit to one setting.")
+    lines.append("- Default far from the top, or a lone spike combo → treat "
+                 "the settings as fragile; re-test on a different period "
+                 "before trusting them.")
+    lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)

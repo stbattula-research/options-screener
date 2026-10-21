@@ -68,6 +68,15 @@ backtest:
   iv_multiplier: 1.15     # IV proxy = realized vol x multiplier (variance risk premium)
   iv_fallback: 0.25       # used while trailing history is too short
 
+# v5 exit-rule sensitivity sweep: re-runs the simulation over a grid of
+# exit rules to check whether the exits: defaults above are robust or
+# overfit. Grid values are intentionally coarse — this is a robustness
+# check, not an optimizer. Run: python backtest.py --sweep --ticker SPY
+backtest_sweep:
+  profit_targets: [0.25, 0.50, 0.75]   # close at this fraction of max profit
+  loss_multiples: [1.5, 2.0, 3.0]      # manage when cost-to-close hits this x premium
+  manage_dtes: [14, 21]                # exit/roll at this DTE
+
 # v3 alerting: email + webhook on NEW qualifying signals only (deduped via a
 # local state file). Opt-in: enabled must be true AND the channel's env vars
 # set. Run with `python screener.py --alerts` (or `--alerts-dry-run`).

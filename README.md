@@ -66,7 +66,8 @@ max drawdown, exit breakdown):
 ```bash
 python backtest.py --ticker SPY --years 2
 python backtest.py --all --years 5   # whole watchlist
-# writes reports/backtest_YYYY-MM-DD.md and .json
+python backtest.py --sweep --ticker SPY --years 5  # exit-rule sensitivity sweep
+# writes reports/backtest_YYYY-MM-DD.md and .json (or backtest-sweep-*)
 ```
 
 How it works: every 5 trading days it sells a ~30-delta put (35 DTE by
@@ -167,6 +168,25 @@ alert can only ever open one position and a closed position is never
 silently re-opened. State lives in `positions/positions.json` (local,
 git-ignored). Closed P&L is summed over contracts × 100 shares.
 
+## Exit-rule sensitivity sweep
+
+The mechanical exit rules in `config.yaml` (50% of max profit, 21-DTE
+management, 2×-premium loss management) are config values, not validated
+truths. The sweep re-runs the same simulation over a grid of those rules
+and ranks the outcomes by model total P&L:
+
+```bash
+python backtest.py --sweep --ticker SPY --years 5
+```
+
+The report marks the config default (★) and shows each combo's Δ vs the
+default. The question it answers: is the default combo near the top with
+smooth neighbors (robust), or does performance collapse one notch away
+(fragile/overfit)? The grid lives in `config.yaml` under `backtest_sweep:`
+— deliberately coarse, because this is a robustness check, not an
+optimizer. Everything else (entries, strikes, IV proxy) is identical across
+combos.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -182,6 +202,10 @@ git-ignored). Closed P&L is summed over contracts × 100 shares.
   newly fired alerts, marked against each day's chain, exit-checked on the
   50%-profit / 21-DTE / 2x-premium rules; stale holds when quotes are
   missing; paper only, no orders, no broker credentials).
+- v5: ✅ exit-rule sensitivity sweep (shipped 2026-10-21: `python backtest.py
+  --sweep` re-runs the simulation over a grid of profit-target / loss-multiple
+  / manage-DTE rules and ranks combos by model total P&L, marking the config
+  default — a robustness check on the mechanical exit rules, not an optimizer).
 - Later, only with explicit approval at each stage: paper-trading broker
   integration. **Live auto-trading is never in scope without the owner's
   explicit go-ahead.**
