@@ -206,6 +206,13 @@ combos.
   --sweep` re-runs the simulation over a grid of profit-target / loss-multiple
   / manage-DTE rules and ranks combos by model total P&L, marking the config
   default — a robustness check on the mechanical exit rules, not an optimizer).
+- v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
+  splits each ticker's backtest trades into low/high entry-IV regimes at that
+  ticker's median entry IV and reports win rate, P&L, and drawdown per regime
+  — descriptive only, since the median is only known after the whole period;
+  it is not a live entry filter. On a 2y SPY smoke run the high-IV regime
+  won 86% vs 64% low-IV, but with the larger max drawdown — extra premium
+  paid for extra risk on that period).
 - Later, only with explicit approval at each stage: paper-trading broker
   integration. **Live auto-trading is never in scope without the owner's
   explicit go-ahead.**

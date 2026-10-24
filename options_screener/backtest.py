@@ -262,6 +262,153 @@ def render_backtest_markdown(payload):
 
 
 # ---------------------------------------------------------------------------
+# IV-regime split (v6)
+#
+# The headline backtest averages over every market mood. This split asks a
+# narrower question: does the strategy behave differently when it enters
+# in a high-volatility regime vs a low-volatility one? Regimes are defined
+# per ticker by the MEDIAN entry IV of that ticker's own trades (low =
+# entry IV <= median, high = entry IV > median), so the split is always
+# roughly even and never cherry-picks a threshold after seeing results.
+# The cost of that honesty: medians differ per ticker, so regimes are NOT
+# comparable across tickers, and "high IV" here means the trailing-realized
+# IV proxy, not traded implied vol.
+#
+# Model-based like the rest of the backtester: Black-Scholes premiums
+# against the trailing-realized-vol IV proxy, no commissions/slippage.
+# Signals only — never places orders, holds no broker credentials.
+# ---------------------------------------------------------------------------
+
+def median_iv(trades):
+    """Median of the trades' entry-IV values; None when there are none."""
+    if not trades:
+        return None
+    ivs = sorted(t["iv"] for t in trades)
+    n = len(ivs)
+    mid = n // 2
+    if n % 2:
+        return ivs[mid]
+    return (ivs[mid - 1] + ivs[mid]) / 2.0
+
+
+def split_by_iv_regime(trades):
+    """Split trades into low/high entry-IV regimes at their median.
+
+    Returns {"median_iv": float|None, "low": {"trades", "summary"},
+    "high": {"trades", "summary"}}. When every trade shares one IV the
+    high regime is legitimately empty (its summary reports 0 trades,
+    not zeros dressed up as results).
+    """
+    med = median_iv(trades)
+    if med is None:
+        empty = {"trades": [], "summary": summarize([])}
+        return {"median_iv": None, "low": empty, "high": empty}
+    low = [t for t in trades if t["iv"] <= med]
+    high = [t for t in trades if t["iv"] > med]
+    return {"median_iv": med,
+            "low": {"trades": low, "summary": summarize(low)},
+            "high": {"trades": high, "summary": summarize(high)}}
+
+
+def build_regime_payload(results, cfg):
+    """results: {ticker: {'trades': [...], 'summary': {...}}} -> payload."""
+    return {
+        "mode": "IV-regime split",
+        "strategy": "cash-secured puts: ~30 delta, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "Regimes are split per ticker at the median entry IV of that "
+            "ticker's own trades (low: IV <= median, high: IV > median); "
+            "medians differ per ticker, so regimes are not comparable "
+            "across tickers.",
+            "Entry IV is the trailing-realized-vol proxy (x 1.15), not "
+            "traded implied vol; a high-IV regime also means larger "
+            "premiums AND larger moves — the split shows whether the "
+            "extra premium compensated for the extra risk.",
+            "This is a description of past model trades, not a rule for "
+            "skipping low- or high-IV entries: the median is only known "
+            "after the whole period, so it cannot be traded in real time.",
+        ],
+        "tickers": {ticker: split_by_iv_regime(res["trades"])
+                    for ticker, res in results.items()},
+    }
+
+
+def _regime_row_md(label, iv_note, res):
+    s = res["summary"]
+    if s["trades"] == 0:
+        return f"| {label} | {iv_note} | 0 | — | — | — | — | — | — |"
+    return (f"| {label} | {iv_note} | {s['trades']} | {s['win_rate']:.1%} | "
+            f"${s['total_pnl']:+,.2f} | ${s['avg_pnl_per_trade']:+,.2f} | "
+            f"{s['avg_return_on_risk']:+.2%} | ${s['max_drawdown']:,.2f} | "
+            f"{s['avg_days_held']:.0f} |")
+
+
+def render_regime_markdown(payload):
+    """Human-readable regime-split report."""
+    lines = ["# Options Screener — IV-Regime Split (research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy (trailing realized vol x "
+             "1.15) — this is NOT historical option-chain data. The split "
+             "describes past model trades; the median is only known after "
+             "the whole period, so it is not a live entry filter.",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             ""]
+    for ticker, split in payload["tickers"].items():
+        med = split["median_iv"]
+        lines.append(f"## {ticker}")
+        lines.append("")
+        if med is None:
+            lines.append("No completed trades — nothing to split.")
+            lines.append("")
+            continue
+        lines.append(f"Median entry IV: {med:.4f} "
+                     f"(low: IV <= median, high: IV > median).")
+        lines.append("")
+        lines.append("| Regime | Entry IV | Trades | Win rate | Total P&L | "
+                     "Avg/trade | Avg RoR | Max DD | Avg days |")
+        lines.append("|--------|----------|--------|----------|-----------|"
+                     "-----------|---------|--------|----------|")
+        lines.append(_regime_row_md("Low IV", f"<= {med:.4f}", split["low"]))
+        lines.append(_regime_row_md("High IV", f"> {med:.4f}", split["high"]))
+        lo, hi = split["low"]["summary"], split["high"]["summary"]
+        if lo["trades"] and hi["trades"]:
+            gap = hi["total_pnl"] - lo["total_pnl"]
+            lines.append("")
+            lines.append(f"High-IV minus low-IV total P&L: ${gap:+,.2f} "
+                         f"(low {lo['win_rate']:.0%} win, high "
+                         f"{hi['win_rate']:.0%} win). A positive gap means "
+                         "the extra premium collected in high-IV entries "
+                         "more than paid for the extra risk on this period "
+                         "— it does not promise the next period behaves "
+                         "the same.")
+        lines.append("")
+    lines.append("## How to read this")
+    lines.append("")
+    lines.append("- Compare win rate AND worst trade AND max drawdown, not "
+                 "just total P&L: high-IV regimes usually win more often "
+                 "but lose bigger when they lose.")
+    lines.append("- A regime with very few trades says little; treat small "
+                 "gaps as noise.")
+    lines.append("- Never turn the median into a live rule (\"only trade "
+                 "above X\") without re-testing it as a forward rule on "
+                 "unseen data — this split is descriptive, not a strategy.")
+    lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Exit-rule sensitivity sweep (v5)
 #
 # The screener's mechanical exit rules (profit target / loss multiple /

@@ -23,16 +23,22 @@ import yaml
 
 from options_screener.backtest import (DEFAULT_SWEEP_GRID,
                                        build_backtest_payload,
+                                       build_regime_payload,
                                        build_sweep_payload,
                                        default_sweep_key, rank_sweep,
                                        render_backtest_markdown,
+                                       render_regime_markdown,
                                        render_sweep_markdown,
-                                       simulate, summarize, sweep_exit_rules)
+                                       simulate, split_by_iv_regime,
+                                       summarize, sweep_exit_rules)
 from options_screener.data import DataError, get_closes
 
 
-def backtest_ticker(ticker, cfg, years, sweep=False):
+def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False):
     closes = get_closes(ticker, period=f"{years}y")
+    if regimes:
+        trades = simulate(closes, cfg)
+        return split_by_iv_regime(trades)
     if not sweep:
         trades = simulate(closes, cfg)
         return {"trades": trades, "summary": summarize(trades)}
@@ -69,6 +75,10 @@ def main() -> int:
     ap.add_argument("--sweep", action="store_true",
                     help="run the exit-rule sensitivity sweep instead of the "
                          "plain backtest (grid from backtest_sweep: in config)")
+    ap.add_argument("--regimes", action="store_true",
+                    help="split the plain backtest into low/high entry-IV "
+                         "regimes at each ticker's median entry IV "
+                         "(descriptive only, not a live entry filter)")
     args = ap.parse_args()
 
     with open(args.config) as f:
@@ -84,9 +94,16 @@ def main() -> int:
     results, errors = {}, []
     for ticker in tickers:
         try:
-            res = backtest_ticker(ticker, cfg, args.years, sweep=args.sweep)
+            res = backtest_ticker(ticker, cfg, args.years, sweep=args.sweep,
+                                  regimes=args.regimes)
             results[ticker] = res
-            if args.sweep:
+            if args.regimes:
+                med = res["median_iv"]
+                lo, hi = res["low"]["summary"], res["high"]["summary"]
+                print(f"[{ticker}] median IV {med}, low: {lo['trades']} trades "
+                      f"${lo['total_pnl']:+,.2f}, high: {hi['trades']} trades "
+                      f"${hi['total_pnl']:+,.2f}")
+            elif args.sweep:
                 best = res[0]
                 default = next(r for r in res if r["is_default"])
                 print(f"[{ticker}] best {best['key']} "
@@ -103,7 +120,22 @@ def main() -> int:
         except Exception:  # never let one ticker kill the run
             errors.append(f"{ticker}: unexpected error\n{traceback.format_exc(limit=3)}")
 
-    if args.sweep:
+    if args.regimes:
+        # results here are per-ticker splits; rebuild plain trade lists for
+        # the payload builder (it splits them itself, identically).
+        plain = {t: {"trades": sorted(
+                                [tr for r in (res["low"], res["high"])
+                                 for tr in r["trades"]],
+                                key=lambda tr: tr["entry_day"]),
+                      "summary": None}
+                 for t, res in results.items()}
+        # summaries are recomputed inside the split; the None above is unused
+        for t, res in results.items():
+            plain[t]["summary"] = summarize(plain[t]["trades"])
+        payload = build_regime_payload(plain, cfg)
+        md_path, json_path = write_reports(payload, args.out_dir, "backtest-regimes",
+                                           render_regime_markdown)
+    elif args.sweep:
         grid = cfg.get("backtest_sweep") or DEFAULT_SWEEP_GRID
         payload = build_sweep_payload(results, cfg, grid)
         md_path, json_path = write_reports(payload, args.out_dir, "backtest-sweep",
