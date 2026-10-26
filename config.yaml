@@ -77,6 +77,14 @@ backtest_sweep:
   loss_multiples: [1.5, 2.0, 3.0]      # manage when cost-to-close hits this x premium
   manage_dtes: [14, 21]                # exit/roll at this DTE
 
+# v7 skew-aware spread backtest: re-runs the bull-put-spread simulation once
+# per skew value (same entries/strikes/exits, only leg pricing changes) to
+# isolate the skew effect on net credit and on the live 1/3-width credit
+# rule. Run: python backtest.py --spreads --ticker SPY
+spread_backtest:
+  skews: [0.0, 1.0, 2.0, 4.0]  # 0 = flat Black-Scholes; 2 ~= observed SPY put skew
+  width_pct: 0.02               # narrow end of the live spread: 2-6% band
+
 # v3 alerting: email + webhook on NEW qualifying signals only (deduped via a
 # local state file). Opt-in: enabled must be true AND the channel's env vars
 # set. Run with `python screener.py --alerts` (or `--alerts-dry-run`).

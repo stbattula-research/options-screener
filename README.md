@@ -187,6 +187,34 @@ smooth neighbors (robust), or does performance collapse one notch away
 optimizer. Everything else (entries, strikes, IV proxy) is identical across
 combos.
 
+## Skew-aware spread backtest (v7)
+
+The v5 sweep deferred a question: under flat Black-Scholes, no width in
+the live spread range (2–6% of the short strike) passes the live
+screener's "collect at least 1/3 of the width" entry rule. The hope was
+that downside skew would rescue it. It does not — and v7 shows why:
+
+```bash
+python backtest.py --spreads --ticker SPY --years 2
+```
+
+Each skew value re-runs the same spread simulation (same entry/strike/
+exit rules, only leg pricing changes, with
+`iv(K) = atm_iv x (1 + skew x max(0, log(S/K)))`). Skew raises the long
+leg's IV more than the short leg's, so the long leg costs more and net
+credit *falls* as skew rises. The earlier note's direction was backwards;
+v7 corrects it with a test that asserts the direction.
+
+Live smoke (SPY, 2y, 2% width): avg credit/width falls 0.244 at skew 0
+to 0.200 at skew 4, and the credit-rule pass rate falls 5% to 0% — while
+model total P&L flips from +$1,615 to −$1,299. What moves the ratio
+toward the 1/3 rule is narrower widths (around 1% of the short strike)
+and higher vol, not steeper skew. That is a screener-design finding, not
+a recommendation: narrowing the live width band would also shrink max
+loss per trade and change which wings qualify, so it needs weighing
+before any change. The grid lives in `config.yaml` under
+`spread_backtest:`.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -206,6 +234,12 @@ combos.
   --sweep` re-runs the simulation over a grid of profit-target / loss-multiple
   / manage-DTE rules and ranks combos by model total P&L, marking the config
   default — a robustness check on the mechanical exit rules, not an optimizer).
+- v7: ✅ skew-aware spread backtest (shipped 2026-10-26: `python backtest.py
+  --spreads` prices both spread legs at their own skewed IVs and sweeps
+  skew 0→4, closing the v5 deferred question — skew *lowers* net credit
+  (long leg's IV rises faster), so it cannot rescue the 1/3-width credit
+  rule; SPY 2y smoke: credit/width 0.244→0.200, pass rate 5%→0% as skew
+  rises. Narrower widths, not steeper skew, move the ratio toward the rule).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime

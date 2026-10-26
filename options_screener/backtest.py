@@ -17,7 +17,8 @@ credentials.
 
 import math
 
-from .vol import bs_put_delta, bs_put_value, realized_vol
+from .vol import (bs_put_delta, bs_put_value, bs_put_value_skewed,
+                   realized_vol, skewed_iv)
 
 
 def strike_for_delta(price, years_to_expiry, risk_free_rate, sigma,
@@ -554,6 +555,283 @@ def render_sweep_markdown(payload):
                  "the settings as fragile; re-test on a different period "
                  "before trusting them.")
     lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Skew-aware bull-put-spread backtest (v7)
+#
+# This closes the question deferred in v5 (2026-10-21): under flat
+# Black-Scholes, NO width in the live spread range (2-6% of the short
+# strike) passes the live screener's "collect at least 1/3 of the width"
+# entry rule (measured 0/147 combos). The hope was that downside skew
+# would rescue it. It does not — and the model shows why, plainly:
+#
+# Skew raises the LONG leg's IV more than the short leg's (the long
+# strike sits further below spot), so the long leg costs MORE, net
+# credit FALLS as skew rises, and the credit-to-width ratio falls with
+# it. The earlier note's direction was backwards; this section corrects
+# it with a test that asserts the direction.
+#
+# So what DOES pass the rule? Narrower widths (around 1% of the short
+# strike, i.e. a $5-6 wing on a $600 underlying) and higher vol — the
+# ratio climbs toward 0.30-0.33 there even at skew 0. The live 2-6%
+# width band is therefore the binding constraint, not the vol model.
+# That is a screener-design finding, not a trading recommendation:
+# narrowing the band would also shrink max loss per trade and raise
+# the number of wings that qualify, which the live screener should
+# weigh before changing anything.
+#
+# Mechanics: the short leg is the same ~30-delta CSP strike as the plain
+# backtest (found at the ATM IV proxy); the long leg sits width_pct
+# below it. Both legs are priced at their own skewed IVs, and the
+# spread is marked the same way every day. Exits mirror the CSP rules:
+# close at profit_target_pct of max profit (spread value falls to
+# (1 - target) x net credit), manage at manage_dte, manage when the
+# cost to close reaches (1 + loss_manage_multiple) x net credit.
+# At expiry the spread settles at its intrinsic value, capped at the
+# width. Model-based like the rest of the backtester; signals only.
+# ---------------------------------------------------------------------------
+
+DEFAULT_SPREAD_BACKTEST = {
+    "skews": [0.0, 1.0, 2.0, 4.0],
+    "width_pct": 0.02,  # narrow end of the live 2-6% band: gives the
+    # 1/3-width credit rule its best chance inside the live rules
+}
+
+
+def spread_value_at(price, short_strike, long_strike, years_to_expiry,
+                    risk_free_rate, atm_iv, skew):
+    """Model value of one bull-put-spread unit (short minus long, per share)."""
+    short_v = bs_put_value_skewed(price, short_strike, years_to_expiry,
+                                  risk_free_rate, atm_iv, skew)
+    long_v = bs_put_value_skewed(price, long_strike, years_to_expiry,
+                                 risk_free_rate, atm_iv, skew)
+    return short_v - long_v
+
+
+def simulate_spread_trade(prices, entry_day, dte, sigma_atm, cfg, skew,
+                          width_pct, exits=None):
+    """Simulate one bull-put-spread trade from entry through its first exit.
+
+    Returns a trade dict in the same shape as simulate_trade (so
+    summarize() works unchanged), plus spread fields: long_strike,
+    width, net_credit_per_share, credit_fraction (net credit / width),
+    passes_credit_rule (credit_fraction >= spread.min_credit_fraction),
+    and max_loss_per_contract. Trades are recorded even when the credit
+    rule fails — that is the point: the report counts how often the
+    rule passes, rather than hiding the failures by never opening.
+    """
+    r = cfg["risk_free_rate"]
+    strat = cfg["strategy"]
+    ex = dict(cfg["exits"])
+    if exits:
+        ex.update(exits)
+    expiry_day = entry_day + dte
+
+    S = prices[entry_day]
+    T = dte / 365.0
+    short_strike = strike_for_delta(S, T, r, sigma_atm, strat["target_delta"])
+    long_strike = short_strike * (1.0 - width_pct)
+    width = short_strike - long_strike
+    net_credit = spread_value_at(S, short_strike, long_strike, T, r,
+                                 sigma_atm, skew)
+    entry_delta = bs_put_delta(S, short_strike, T, r, sigma_atm)
+    min_credit_fraction = cfg.get("spread", {}).get("min_credit_fraction", 0.33)
+
+    profit_trigger = net_credit * (1 - ex["profit_target_pct"])
+    loss_trigger = net_credit * (1 + ex["loss_manage_multiple"])
+
+    reason, exit_day, exit_value = "expired", expiry_day, None
+    for j in range(entry_day + 1, expiry_day + 1):
+        t_rem = (expiry_day - j) / 365.0
+        if t_rem <= 0:
+            v = (max(short_strike - prices[j], 0.0)
+                 - max(long_strike - prices[j], 0.0))
+        else:
+            v = spread_value_at(prices[j], short_strike, long_strike,
+                                t_rem, r, sigma_atm, skew)
+        if v <= profit_trigger:
+            reason, exit_day, exit_value = "profit", j, v
+            break
+        if j < expiry_day and (expiry_day - j) <= ex["manage_dte"]:
+            reason, exit_day, exit_value = "time", j, v
+            break
+        if j < expiry_day and v >= loss_trigger:
+            reason, exit_day, exit_value = "loss", j, v
+            break
+    if exit_value is None:  # held to expiry: intrinsic spread value
+        exit_value = (max(short_strike - prices[expiry_day], 0.0)
+                      - max(long_strike - prices[expiry_day], 0.0))
+
+    pnl_per_share = net_credit - exit_value
+    return {
+        "entry_day": entry_day,
+        "exit_day": exit_day,
+        "days_held": exit_day - entry_day,
+        "entry_price": round(S, 2),
+        "strike": round(short_strike, 2),
+        "long_strike": round(long_strike, 2),
+        "width": round(width, 2),
+        "dte": dte,
+        "iv": round(sigma_atm, 4),
+        "skew": skew,
+        "delta": round(entry_delta, 3),
+        "premium_per_share": round(net_credit, 3),
+        "net_credit_per_share": round(net_credit, 3),
+        "credit_fraction": round(net_credit / width, 4) if width > 0 else None,
+        "passes_credit_rule": bool(width > 0 and net_credit / width >= min_credit_fraction),
+        "max_loss_per_contract": round(max(width - net_credit, 0.0) * 100, 2),
+        "exit_reason": reason,
+        "exit_value_per_share": round(exit_value, 3),
+        "pnl_per_contract": round(pnl_per_share * 100, 2),
+        # return on the defined-risk capital actually at stake
+        "return_on_risk": round(pnl_per_share / max(width - net_credit, 1e-9), 4),
+        "assigned": bool(reason == "expired" and exit_value > 0),
+    }
+
+
+def simulate_spreads(prices, cfg, skew, width_pct):
+    """Run the spread strategy over a price series at one skew value."""
+    bt = cfg["backtest"]
+    dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
+                                  + cfg["strategy"]["dte_max"]) // 2
+    window, interval = bt["iv_window"], bt["entry_interval_days"]
+    n = len(prices)
+
+    trades = []
+    day = window
+    while day + dte < n:
+        sigma = estimate_iv(prices, day, window,
+                            bt["iv_multiplier"], bt["iv_fallback"])
+        trade = simulate_spread_trade(prices, day, dte, sigma, cfg, skew,
+                                      width_pct)
+        trades.append(trade)
+        day = max(trade["exit_day"] + 1, day + interval)
+    return trades
+
+
+def summarize_spreads(trades):
+    """summarize() plus the spread-specific credit-rule stats."""
+    s = summarize(trades)
+    if trades:
+        fracs = [t["credit_fraction"] for t in trades
+                 if t["credit_fraction"] is not None]
+        s["avg_credit_fraction"] = round(sum(fracs) / len(fracs), 4) if fracs else None
+        s["credit_rule_pass_rate"] = round(
+            sum(1 for t in trades if t["passes_credit_rule"]) / len(trades), 4)
+    else:
+        s["avg_credit_fraction"] = None
+        s["credit_rule_pass_rate"] = None
+    return s
+
+
+def sweep_skew_spreads(prices, cfg, skews, width_pct):
+    """Run the spread simulation once per skew value.
+
+    Returns {skew: {"trades": [...], "summary": {...}}}. The entry rule,
+    strike rule and exit rules are identical across skews — only the leg
+    pricing changes. Later entries may shift a day or two because exit
+    timing differs by skew, so per-skew trade counts can differ slightly;
+    the credit-fraction comparison is per trade, which is what isolates
+    the pricing effect.
+    """
+    out = {}
+    for skew in skews:
+        trades = simulate_spreads(prices, cfg, skew, width_pct)
+        out[skew] = {"trades": trades, "summary": summarize_spreads(trades)}
+    return out
+
+
+def build_spread_payload(sweeps, cfg, skews, width_pct):
+    """sweeps: {ticker: {skew: {...}}} -> JSON-serializable report payload."""
+    return {
+        "mode": "skew-aware bull-put-spread backtest",
+        "skews": skews,
+        "width_pct": width_pct,
+        "strategy": "bull put spreads over ~30-delta CSP strikes, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "Both spread legs are priced with Black-Scholes at their own "
+            "skewed IVs: iv(K) = atm_iv * (1 + skew * max(0, log(S/K))). "
+            "Skew is a shape parameter, not a fitted smile — no "
+            "term-structure, no upside wing, no calibration to a real chain.",
+            "The short strike is found at the ATM IV proxy (same as the "
+            "plain CSP backtest); skew changes leg pricing only. Later "
+            "entries may shift because exit timing differs by skew, so "
+            "the clean comparison is the per-trade credit fraction, not "
+            "the trade count.",
+            f"Spread width is fixed at {width_pct:.0%} of the short strike "
+            "(the narrow end of the live screener's 2-6% band) and the "
+            "credit rule is the live one (net credit >= "
+            f"{cfg.get('spread', {}).get('min_credit_fraction', 0.33):.0%} "
+            "of width). Trades are recorded even when the rule fails, so "
+            "the pass rate is measured, not assumed.",
+            "A spread's max loss is capped at (width - net credit) by "
+            "construction; return on risk is P&L over that capped capital, "
+            "not over the full strike as in the CSP backtest.",
+        ],
+        "tickers": sweeps,
+    }
+
+
+def _spread_row_md(skew, res):
+    s = res["summary"]
+    if s["trades"] == 0:
+        return f"| {skew} | 0 | — | — | — | — | — |"
+    return (f"| {skew} | {s['trades']} | {s['win_rate']:.1%} | "
+            f"${s['total_pnl']:+,.2f} | {s['avg_credit_fraction']:.3f} | "
+            f"{s['credit_rule_pass_rate']:.0%} | ${s['max_drawdown']:,.2f} |")
+
+
+def render_spread_markdown(payload):
+    """Human-readable skew-aware spread backtest report."""
+    lines = ["# Options Screener — Skew-Aware Spread Backtest (research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy — this is NOT historical "
+             "option-chain data. Skew here is a one-parameter shape: "
+             "iv(K) = atm_iv x (1 + skew x max(0, log(S/K))), not a "
+             "fitted market smile. Results are illustrative research, not "
+             "expected returns.",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             f"**Spread width:** {payload['width_pct']:.0%} of the short "
+             "strike. **Skews swept:** "
+             + ", ".join(str(s) for s in payload["skews"]) + ".",
+             ""]
+    for ticker, per_skew in payload["tickers"].items():
+        lines.append(f"## {ticker}")
+        lines.append("")
+        lines.append("| Skew | Trades | Win rate | Total P&L | Avg credit/width | "
+                     "Credit-rule pass | Max DD |")
+        lines.append("|------|--------|----------|-----------|------------------|"
+                     "-------------------|--------|")
+        for skew in payload["skews"]:
+            lines.append(_spread_row_md(skew, per_skew[skew]))
+        lines.append("")
+        flat = per_skew[payload["skews"][0]]["summary"]
+        steep = per_skew[payload["skews"][-1]]["summary"]
+        if flat["trades"] and steep["trades"]:
+            lines.append(
+                "Reading: if avg credit/width FALLS as skew rises, skew is "
+                "hurting the credit rule, not helping it — the long leg's "
+                "IV rises faster than the short leg's, so it costs more "
+                "and net credit shrinks. That is what the model shows at "
+                f"this width: {flat['avg_credit_fraction']:.3f} at skew "
+                f"{payload['skews'][0]} vs {steep['avg_credit_fraction']:.3f} "
+                f"at skew {payload['skews'][-1]}. Narrower widths, not "
+                "steeper skew, are what move the ratio toward the 1/3 rule.")
+        lines.append("")
     lines.append("## Assumptions & limitations")
     lines.append("")
     for a in payload["assumptions"]:

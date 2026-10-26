@@ -11,6 +11,7 @@ Signals only. This tool never places orders and holds no broker credentials.
 Usage:
     python backtest.py [--config config.yaml] [--out-dir reports]
                        [--ticker SPY | --all] [--years 3] [--sweep]
+                       [--regimes] [--spreads]
 """
 
 import argparse
@@ -21,21 +22,29 @@ from datetime import date
 
 import yaml
 
-from options_screener.backtest import (DEFAULT_SWEEP_GRID,
+from options_screener.backtest import (DEFAULT_SPREAD_BACKTEST,
+                                       DEFAULT_SWEEP_GRID,
                                        build_backtest_payload,
                                        build_regime_payload,
+                                       build_spread_payload,
                                        build_sweep_payload,
                                        default_sweep_key, rank_sweep,
                                        render_backtest_markdown,
                                        render_regime_markdown,
+                                       render_spread_markdown,
                                        render_sweep_markdown,
                                        simulate, split_by_iv_regime,
-                                       summarize, sweep_exit_rules)
+                                       summarize, sweep_exit_rules,
+                                       sweep_skew_spreads)
 from options_screener.data import DataError, get_closes
 
 
-def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False):
+def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
+                    spreads=False):
     closes = get_closes(ticker, period=f"{years}y")
+    if spreads:
+        sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
+        return sweep_skew_spreads(closes, cfg, sb["skews"], sb["width_pct"])
     if regimes:
         trades = simulate(closes, cfg)
         return split_by_iv_regime(trades)
@@ -79,6 +88,12 @@ def main() -> int:
                     help="split the plain backtest into low/high entry-IV "
                          "regimes at each ticker's median entry IV "
                          "(descriptive only, not a live entry filter)")
+    ap.add_argument("--spreads", action="store_true",
+                    help="run the skew-aware bull-put-spread backtest: one "
+                         "spread simulation per skew value in "
+                         "spread_backtest: (same entries, only leg pricing "
+                         "changes), to test whether skew rescues the "
+                         "1/3-width credit rule")
     args = ap.parse_args()
 
     with open(args.config) as f:
@@ -95,9 +110,17 @@ def main() -> int:
     for ticker in tickers:
         try:
             res = backtest_ticker(ticker, cfg, args.years, sweep=args.sweep,
-                                  regimes=args.regimes)
+                                  regimes=args.regimes, spreads=args.spreads)
             results[ticker] = res
-            if args.regimes:
+            if args.spreads:
+                flat_skew = (cfg.get("spread_backtest")
+                             or DEFAULT_SPREAD_BACKTEST)["skews"][0]
+                flat = res[flat_skew]["summary"]
+                print(f"[{ticker}] spreads: {flat['trades']} trades at skew "
+                      f"{flat_skew}, avg credit/width "
+                      f"{flat['avg_credit_fraction']}, pass rate "
+                      f"{flat['credit_rule_pass_rate']}")
+            elif args.regimes:
                 med = res["median_iv"]
                 lo, hi = res["low"]["summary"], res["high"]["summary"]
                 print(f"[{ticker}] median IV {med}, low: {lo['trades']} trades "
@@ -120,7 +143,14 @@ def main() -> int:
         except Exception:  # never let one ticker kill the run
             errors.append(f"{ticker}: unexpected error\n{traceback.format_exc(limit=3)}")
 
-    if args.regimes:
+    if args.spreads:
+        sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
+        payload = build_spread_payload(results, cfg, sb["skews"],
+                                       sb["width_pct"])
+        md_path, json_path = write_reports(payload, args.out_dir,
+                                           "backtest-spreads",
+                                           render_spread_markdown)
+    elif args.regimes:
         # results here are per-ticker splits; rebuild plain trade lists for
         # the payload builder (it splits them itself, identically).
         plain = {t: {"trades": sorted(
