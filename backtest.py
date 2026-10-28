@@ -11,7 +11,7 @@ Signals only. This tool never places orders and holds no broker credentials.
 Usage:
     python backtest.py [--config config.yaml] [--out-dir reports]
                        [--ticker SPY | --all] [--years 3] [--sweep]
-                       [--regimes] [--spreads]
+                       [--regimes] [--spreads] [--spread-widths]
 """
 
 import argparse
@@ -23,25 +23,32 @@ from datetime import date
 import yaml
 
 from options_screener.backtest import (DEFAULT_SPREAD_BACKTEST,
+                                       DEFAULT_SPREAD_WIDTH_SWEEP,
                                        DEFAULT_SWEEP_GRID,
                                        build_backtest_payload,
                                        build_regime_payload,
                                        build_spread_payload,
                                        build_sweep_payload,
+                                       build_width_payload,
                                        default_sweep_key, rank_sweep,
                                        render_backtest_markdown,
                                        render_regime_markdown,
                                        render_spread_markdown,
                                        render_sweep_markdown,
+                                       render_width_markdown,
                                        simulate, split_by_iv_regime,
                                        summarize, sweep_exit_rules,
-                                       sweep_skew_spreads)
+                                       sweep_skew_spreads,
+                                       sweep_width_spreads)
 from options_screener.data import DataError, get_closes
 
 
 def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
-                    spreads=False):
+                    spreads=False, spread_widths=False):
     closes = get_closes(ticker, period=f"{years}y")
+    if spread_widths:
+        sw = cfg.get("spread_width_sweep") or DEFAULT_SPREAD_WIDTH_SWEEP
+        return sweep_width_spreads(closes, cfg, sw["widths"], sw["skew"])
     if spreads:
         sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
         return sweep_skew_spreads(closes, cfg, sb["skews"], sb["width_pct"])
@@ -94,6 +101,11 @@ def main() -> int:
                          "spread_backtest: (same entries, only leg pricing "
                          "changes), to test whether skew rescues the "
                          "1/3-width credit rule")
+    ap.add_argument("--spread-widths", action="store_true",
+                    help="run the spread-width sweep: one spread simulation "
+                         "per wing width in spread_width_sweep: at a fixed "
+                         "skew, to measure where the 1/3-width credit rule "
+                         "starts passing and what passing costs in P&L")
     args = ap.parse_args()
 
     with open(args.config) as f:
@@ -110,9 +122,19 @@ def main() -> int:
     for ticker in tickers:
         try:
             res = backtest_ticker(ticker, cfg, args.years, sweep=args.sweep,
-                                  regimes=args.regimes, spreads=args.spreads)
+                                  regimes=args.regimes, spreads=args.spreads,
+                                  spread_widths=args.spread_widths)
             results[ticker] = res
-            if args.spreads:
+            if args.spread_widths:
+                sw = (cfg.get("spread_width_sweep")
+                      or DEFAULT_SPREAD_WIDTH_SWEEP)
+                narrow = res[sw["widths"][0]]["summary"]
+                wide = res[sw["widths"][-1]]["summary"]
+                print(f"[{ticker}] spread widths: {sw['widths'][0]:.0%} "
+                      f"avg credit/width {narrow['avg_credit_fraction']} "
+                      f"vs {sw['widths'][-1]:.0%} "
+                      f"{wide['avg_credit_fraction']}")
+            elif args.spreads:
                 flat_skew = (cfg.get("spread_backtest")
                              or DEFAULT_SPREAD_BACKTEST)["skews"][0]
                 flat = res[flat_skew]["summary"]
@@ -143,7 +165,13 @@ def main() -> int:
         except Exception:  # never let one ticker kill the run
             errors.append(f"{ticker}: unexpected error\n{traceback.format_exc(limit=3)}")
 
-    if args.spreads:
+    if args.spread_widths:
+        sw = cfg.get("spread_width_sweep") or DEFAULT_SPREAD_WIDTH_SWEEP
+        payload = build_width_payload(results, cfg, sw["widths"], sw["skew"])
+        md_path, json_path = write_reports(payload, args.out_dir,
+                                           "backtest-spread-widths",
+                                           render_width_markdown)
+    elif args.spreads:
         sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
         payload = build_spread_payload(results, cfg, sb["skews"],
                                        sb["width_pct"])

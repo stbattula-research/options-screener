@@ -215,6 +215,26 @@ loss per trade and change which wings qualify, so it needs weighing
 before any change. The grid lives in `config.yaml` under
 `spread_backtest:`.
 
+## Spread-width sweep (v8)
+
+v7 fixed the width at 2% and swept skew; its note claimed narrower
+widths move the credit/width ratio toward the live 1/3 rule, but that
+was never measured across widths. This sweep measures it:
+
+```bash
+python backtest.py --spread-widths --ticker SPY --years 2
+```
+
+Skew is held fixed at 2.0 (about the observed SPY put skew) while the
+wing width runs 1% through the live 2–6% band. Two columns pull
+opposite ways and are reported together: the credit fraction (which
+rises as the wing narrows) and total P&L per contract (which falls,
+because a narrower wing collects less absolute credit). The report
+names the narrowest width whose *average* credit/width reaches the
+1/3 rule, and the width with the best total P&L — the tradeoff to
+weigh before touching the live band. It does not change the live
+band: that stays the owner's decision.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -240,6 +260,11 @@ before any change. The grid lives in `config.yaml` under
   (long leg's IV rises faster), so it cannot rescue the 1/3-width credit
   rule; SPY 2y smoke: credit/width 0.244→0.200, pass rate 5%→0% as skew
   rises. Narrower widths, not steeper skew, move the ratio toward the rule).
+- v8: ✅ spread-width sweep (shipped 2026-10-28: `python backtest.py
+  --spread-widths` sweeps wing widths 1–6% at fixed skew 2.0 and reports
+  where the 1/3-width credit rule starts passing on average and what
+  passing costs in total P&L — measuring v7's narrower-width claim
+  rather than changing the live 2–6% band).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime

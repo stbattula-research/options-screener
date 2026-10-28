@@ -842,3 +842,160 @@ def render_spread_markdown(payload):
                  "risking capital._")
     lines.append("")
     return "\n".join(lines)
+
+
+# Spread-width sweep (v8)
+#
+# v7 fixed the width at 2% and swept skew; its note claimed narrower
+# widths move the credit/width ratio toward the live 1/3 rule, but that
+# was a single-width observation plus a directional argument, not a
+# measurement. This sweep measures it: same skew, same entries/strikes/
+# exits, only the wing width changes (1% up through the live 2-6%
+# band). Two things are reported per width, because they pull opposite
+# ways: the credit fraction (which should rise as the wing narrows)
+# and the total P&L per contract (which should fall, because a
+# narrower wing collects less absolute credit and caps max loss lower).
+# The sweep therefore answers "where does the rule start passing?" and
+# "what does passing cost?" together — it does NOT change the live
+# screener's width band, which stays a decision for the owner.
+# ---------------------------------------------------------------------------
+
+DEFAULT_SPREAD_WIDTH_SWEEP = {
+    "widths": [0.01, 0.02, 0.03, 0.04, 0.06],
+    "skew": 2.0,  # ~= observed SPY put skew; the realistic case, not flat
+}
+
+
+def sweep_width_spreads(prices, cfg, widths, skew):
+    """Run the spread simulation once per wing width at one skew value.
+
+    Returns {width: {"trades": [...], "summary": {...}}}. Only the long
+    leg moves (long strike = short strike x (1 - width)); entries,
+    short strikes and exit rules are identical across widths, though
+    later entries may shift a day or two because exit timing differs
+    by width — the same caveat as the skew sweep.
+    """
+    out = {}
+    for width in widths:
+        trades = simulate_spreads(prices, cfg, skew, width)
+        out[width] = {"trades": trades, "summary": summarize_spreads(trades)}
+    return out
+
+
+def _first_width_meeting(widths, sweeps, key, threshold):
+    """First width (narrowest first) whose summary[key] meets threshold."""
+    for w in sorted(widths):
+        s = sweeps[w]["summary"]
+        if s["trades"] and s[key] is not None and s[key] >= threshold:
+            return w
+    return None
+
+
+def build_width_payload(sweeps, cfg, widths, skew):
+    """sweeps: {ticker: {width: {...}}} -> JSON-serializable report payload."""
+    min_frac = cfg.get("spread", {}).get("min_credit_fraction", 0.33)
+    per_ticker = {}
+    for ticker, per_width in sweeps.items():
+        best_pnl = max(per_width, key=lambda w: (
+            per_width[w]["summary"]["total_pnl"]
+            if per_width[w]["summary"]["trades"] else float("-inf")))
+        per_ticker[ticker] = {
+            "sweep": per_width,
+            "first_width_avg_credit_meets_rule": _first_width_meeting(
+                widths, per_width, "avg_credit_fraction", min_frac),
+            "first_width_pass_rate_meets_rule": _first_width_meeting(
+                widths, per_width, "credit_rule_pass_rate", 0.5),
+            "best_pnl_width": best_pnl,
+        }
+    return {
+        "mode": "spread-width sweep backtest",
+        "widths": widths,
+        "skew": skew,
+        "min_credit_fraction": min_frac,
+        "strategy": "bull put spreads over ~30-delta CSP strikes, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "Both spread legs are priced with Black-Scholes at their own "
+            "skewed IVs: iv(K) = atm_iv * (1 + skew * max(0, log(S/K))). "
+            f"Skew is held fixed at {skew} across the whole sweep, so "
+            "width is the only thing varying.",
+            "The short strike is found at the ATM IV proxy (same as the "
+            "plain CSP backtest); only the long leg moves with width. "
+            "Later entries may shift because exit timing differs by "
+            "width, so the clean comparison is the per-trade credit "
+            "fraction, not the trade count.",
+            "Trades are recorded even when the credit rule fails, so "
+            "the pass rate is measured, not assumed. A narrower wing "
+            "raises the credit fraction but collects less absolute "
+            "credit and caps max loss lower — the P&L column shows "
+            "what that tradeoff costs on this period.",
+        ],
+        "tickers": per_ticker,
+    }
+
+
+def _width_row_md(width, res):
+    s = res["summary"]
+    if s["trades"] == 0:
+        return f"| {width:.0%} | 0 | — | — | — | — | — |"
+    return (f"| {width:.0%} | {s['trades']} | {s['win_rate']:.1%} | "
+            f"${s['total_pnl']:+,.2f} | {s['avg_credit_fraction']:.3f} | "
+            f"{s['credit_rule_pass_rate']:.0%} | ${s['max_drawdown']:,.2f} |")
+
+
+def render_width_markdown(payload):
+    """Human-readable spread-width sweep report."""
+    lines = ["# Options Screener — Spread-Width Sweep Backtest (research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy — this is NOT historical "
+             "option-chain data. Results are illustrative research, not "
+             "expected returns.",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             f"**Skew held fixed:** {payload['skew']}. "
+             f"**Widths swept:** "
+             + ", ".join(f"{w:.0%}" for w in payload["widths"])
+             + f". **Credit rule:** net credit >= "
+             f"{payload['min_credit_fraction']:.0%} of width.",
+             ""]
+    for ticker, info in payload["tickers"].items():
+        per_width = info["sweep"]
+        lines.append(f"## {ticker}")
+        lines.append("")
+        lines.append("| Width | Trades | Win rate | Total P&L | Avg credit/width | "
+                     "Credit-rule pass | Max DD |")
+        lines.append("|-------|--------|----------|-----------|------------------|"
+                     "-------------------|--------|")
+        for width in payload["widths"]:
+            lines.append(_width_row_md(width, per_width[width]))
+        lines.append("")
+        first_avg = info["first_width_avg_credit_meets_rule"]
+        best = info["best_pnl_width"]
+        if first_avg is not None:
+            lines.append(
+                f"Reading: the average credit/width first reaches the "
+                f"{payload['min_credit_fraction']:.0%} rule at a "
+                f"{first_avg:.0%} wing (narrowest width meeting it on "
+                f"average). Narrower wings raise the ratio but collect "
+                f"less absolute credit — the best total P&L on this "
+                f"period came from the {best:.0%} wing, which is the "
+                f"tradeoff to weigh before touching the live 2-6% band.")
+        else:
+            lines.append(
+                "Reading: no swept width averages the "
+                f"{payload['min_credit_fraction']:.0%} credit rule on "
+                "this period — even the narrowest wing falls short on "
+                "average, so narrowing the live band alone would not "
+                "make the rule pass here.")
+        lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)

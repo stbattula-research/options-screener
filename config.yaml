@@ -85,6 +85,14 @@ spread_backtest:
   skews: [0.0, 1.0, 2.0, 4.0]  # 0 = flat Black-Scholes; 2 ~= observed SPY put skew
   width_pct: 0.02               # narrow end of the live spread: 2-6% band
 
+# v8 spread-width sweep: re-runs the spread simulation once per wing
+# width at a FIXED skew, to measure where the live 1/3-width credit
+# rule starts passing and what passing costs in total P&L. Run:
+# python backtest.py --spread-widths --ticker SPY
+spread_width_sweep:
+  widths: [0.01, 0.02, 0.03, 0.04, 0.06]  # 1% below the live band, then the 2-6% band
+  skew: 2.0  # ~= observed SPY put skew; the realistic case, not flat
+
 # v3 alerting: email + webhook on NEW qualifying signals only (deduped via a
 # local state file). Opt-in: enabled must be true AND the channel's env vars
 # set. Run with `python screener.py --alerts` (or `--alerts-dry-run`).
