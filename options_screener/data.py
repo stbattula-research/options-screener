@@ -75,3 +75,35 @@ def get_put_chain(ticker: str, expiry: str):
     if puts is None or puts.empty:
         raise DataError(f"{ticker} {expiry}: empty put chain")
     return puts
+
+
+def get_next_earnings(ticker: str):
+    """Next earnings date for `ticker` as a `date`, or None if unknown.
+
+    Unlike the other fetchers here, this NEVER raises: yfinance's
+    calendar data is patchy (ETFs have no earnings; some tickers return
+    nothing), and a missing date is an "unknown" to flag, not a reason to
+    kill the whole run. Returns None on any fetch/parse failure.
+    """
+    from options_screener.earnings import parse_earnings_date
+
+    try:
+        cal = yf.Ticker(ticker).calendar
+    except Exception:
+        return None
+    if isinstance(cal, dict):
+        dates = cal.get("Earnings Date")
+        if dates:
+            first = dates[0] if isinstance(dates, (list, tuple)) else dates
+            return parse_earnings_date(first)
+        return None
+    # Some yfinance versions return a DataFrame with an "Earnings Date"
+    # column instead of a dict.
+    try:
+        col = cal["Earnings Date"]
+        values = col.tolist() if hasattr(col, "tolist") else list(col)
+        if values:
+            return parse_earnings_date(values[0])
+    except Exception:
+        return None
+    return None

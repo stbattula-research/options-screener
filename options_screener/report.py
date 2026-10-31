@@ -24,6 +24,22 @@ def _iv_rank_cell(s: dict) -> str:
     return "n/a"
 
 
+def _earnings_cell(s: dict) -> str:
+    """Render the earnings cell: the date when known, 'unknown' when the
+    calendar had nothing, '—' when the feature is disabled. A date flagged
+    with ⚠ means earnings fall inside the window but exclusion is off —
+    the signal prints, and the user decides."""
+    earn = s.get("earnings") or {}
+    status = earn.get("status")
+    if status == "disabled":
+        return "—"
+    if status == "unknown" or not earn.get("date"):
+        return "unknown"
+    if status == "inside":
+        return f"{earn['date']} ⚠"
+    return earn["date"]
+
+
 def build_report_payload(results: dict, cfg: dict, as_of: str | None = None) -> dict:
     """Assemble the JSON-serializable report payload."""
     spread_cfg = cfg.get("spread", {})
@@ -39,6 +55,7 @@ def build_report_payload(results: dict, cfg: dict, as_of: str | None = None) -> 
             "spread": {k: spread_cfg.get(k) for k in
                        ("enabled", "min_width_pct", "max_width_pct",
                         "min_credit_fraction")} if spread_cfg else None,
+            "earnings": cfg.get("earnings", {}),
             "paper": cfg.get("paper", {}).get("enabled", False),
         },
         "disclaimer": DISCLAIMER,
@@ -118,8 +135,8 @@ def render_markdown(payload: dict) -> str:
         lines.append(f"## Signals ({len(signals)})")
         lines.append("")
         lines.append("| Ticker | Underlying | Strike | Expiry | DTE | Δ | IV | "
-                     "IV rank | Premium | Ann. yield | Bid/Ask | OI | Breakeven |")
-        lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+                     "IV rank | Premium | Ann. yield | Bid/Ask | OI | Breakeven | Earnings |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         for s in signals:
             anny = f"{s['annualized_yield']:.1%}" if s["annualized_yield"] is not None else "n/a"
             lines.append(
@@ -127,7 +144,7 @@ def render_markdown(payload: dict) -> str:
                 f"{s['expiry']} | {s['dte']} | {s['delta']:.2f} | {s['iv']:.2%} | "
                 f"{_iv_rank_cell(s)} | {s['premium_pct']:.2%} | {anny} | "
                 f"${s['bid']:.2f}/${s['ask']:.2f} | {s['open_interest']} | "
-                f"${s['breakeven']:.2f} |")
+                f"${s['breakeven']:.2f} | {_earnings_cell(s)} |")
         lines.append("")
         lines.append("## Exit plan (per signal)")
         lines.append("")
@@ -201,6 +218,13 @@ def render_markdown(payload: dict) -> str:
         "above; the long leg is the cheaper same-expiry put, 2–6% of the short "
         "strike lower, that maximizes return on risk while passing liquidity "
         "filters and collecting at least 1/3 of the spread width in credit.",
+        "- Earnings gate: a signal whose option window contains a known "
+        "earnings date is skipped (config `earnings.exclude`, default on) "
+        "and the skip reason names the date — an earnings gap can run "
+        "through the short strike overnight. When the calendar has no date "
+        "for a ticker, the Earnings column says `unknown`: that is a gap in "
+        "the data, not evidence of no earnings. With `exclude: false` the "
+        "signal still prints, flagged with its earnings date (⚠).",
         "- Deltas are Black-Scholes estimates using a fixed risk-free rate "
         "assumption; broker greeks may differ slightly.",
         "- Signals are candidates for *research*, not orders. Nothing here "

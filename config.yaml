@@ -93,6 +93,15 @@ spread_width_sweep:
   widths: [0.01, 0.02, 0.03, 0.04, 0.06]  # 1% below the live band, then the 2-6% band
   skew: 2.0  # ~= observed SPY put skew; the realistic case, not flat
 
+# v9 earnings-aware filter: skip a signal whose option window contains a
+# known earnings announcement (an overnight gap can run through the short
+# strike). A missing calendar date renders as "unknown" — never treated as
+# safe, never a reason to kill the run. Set exclude: false to flag instead
+# of skipping; enabled: false turns the feature off entirely.
+earnings:
+  enabled: true
+  exclude: true
+
 # v3 alerting: email + webhook on NEW qualifying signals only (deduped via a
 # local state file). Opt-in: enabled must be true AND the channel's env vars
 # set. Run with `python screener.py --alerts` (or `--alerts-dry-run`).

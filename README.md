@@ -235,6 +235,22 @@ names the narrowest width whose *average* credit/width reaches the
 weigh before touching the live band. It does not change the live
 band: that stays the owner's decision.
 
+## Earnings-aware filter (v9)
+
+A signal whose option window contains a known earnings announcement is
+skipped: an earnings gap can run through the short strike overnight, and
+the extra premium rarely pays for that jump. The filter is on by default
+(`earnings:` in `config.yaml`); set `exclude: false` to keep the signal
+and flag it instead, or `enabled: false` to turn the feature off.
+
+Honesty built in: the earnings date comes from yfinance's calendar data,
+which is unofficial and sometimes missing (ETFs have no earnings at all).
+A missing date renders as `unknown` in the report's Earnings column — a
+gap in the data, never evidence that no earnings are coming. Only a
+*known* date inside the window excludes a signal, and the skip reason
+names the date. A spread shares its short leg's expiry, so an excluded
+signal never produces a spread either.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -265,6 +281,10 @@ band: that stays the owner's decision.
   where the 1/3-width credit rule starts passing on average and what
   passing costs in total P&L — measuring v7's narrower-width claim
   rather than changing the live 2–6% band).
+- v9: ✅ earnings-aware filter (shipped 2026-10-31: signals whose option
+  window contains a known earnings date are skipped, with the date named
+  in the skip reason; unknown calendar dates render as `unknown`, never
+  as safe; spreads inherit the gate via the shared expiry).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime

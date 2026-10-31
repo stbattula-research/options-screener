@@ -14,13 +14,16 @@ Usage:
 import argparse
 import sys
 import traceback
+from datetime import date
 
 import yaml
 
 from options_screener.alerts import (run_alerts, signal_key, spread_key)
 from options_screener.data import (DataError, get_closes, get_expirations,
-                                   get_put_chain, pick_expiry)
+                                   get_next_earnings, get_put_chain,
+                                   pick_expiry)
 from options_screener import exits as exits_mod
+from options_screener.earnings import apply_earnings_gate
 from options_screener.ivhistory import (iv_rank, load_observations,
                                         record_observation)
 from options_screener.report import build_report_payload, write_reports
@@ -80,6 +83,17 @@ def screen_ticker(ticker: str, cfg: dict) -> dict:
                  "exit_plan": exit_plan(best, cfg)})
     attach_iv_rank(ticker, best, dte, cfg)
 
+    # Earnings gate: a known earnings date inside the option window
+    # excludes the signal (config-gated); an unknown date is flagged, not
+    # treated as safe. The spread inherits the same gate — it shares the
+    # short leg's expiry, so it never prints for an excluded signal.
+    gate = apply_earnings_gate(best, get_next_earnings(ticker),
+                               date.today(), cfg)
+    if gate["excluded"]:
+        return {"status": "skipped", "ticker": ticker,
+                "reason": f"{expiry} ({dte} DTE): {gate['reason']}",
+                "marks": marks, "underlying": round(underlying, 2)}
+
     spread = None
     if cfg.get("spread", {}).get("enabled", False):
         spreads, _ = find_spreads(puts, signals, underlying, expiry, dte, cfg)
@@ -87,7 +101,8 @@ def screen_ticker(ticker: str, cfg: dict) -> dict:
             spread = spreads[0]
             spread.update({"ticker": ticker,
                            "underlying": round(underlying, 2),
-                           "exit_plan": spread_exit_plan(spread, cfg)})
+                           "exit_plan": spread_exit_plan(spread, cfg),
+                           "earnings": best.get("earnings")})
     return {"status": "signal", "signal": best, "spread": spread,
             "marks": marks, "underlying": round(underlying, 2)}
 
