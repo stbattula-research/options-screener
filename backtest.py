@@ -26,25 +26,39 @@ from options_screener.backtest import (DEFAULT_SPREAD_BACKTEST,
                                        DEFAULT_SPREAD_WIDTH_SWEEP,
                                        DEFAULT_SWEEP_GRID,
                                        build_backtest_payload,
+                                       build_earnings_payload,
                                        build_regime_payload,
                                        build_spread_payload,
                                        build_sweep_payload,
                                        build_width_payload,
                                        default_sweep_key, rank_sweep,
                                        render_backtest_markdown,
+                                       render_earnings_markdown,
                                        render_regime_markdown,
                                        render_spread_markdown,
                                        render_sweep_markdown,
                                        render_width_markdown,
-                                       simulate, split_by_iv_regime,
+                                       simulate, simulate_earnings_aware,
+                                       split_by_iv_regime,
                                        summarize, sweep_exit_rules,
                                        sweep_skew_spreads,
                                        sweep_width_spreads)
-from options_screener.data import DataError, get_closes
+from options_screener.data import DataError, get_closes, get_closes_with_dates
 
 
 def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
-                    spreads=False, spread_widths=False):
+                    spreads=False, spread_widths=False,
+                    earnings_calendar=None):
+    if earnings_calendar is not None:
+        closes, dates = get_closes_with_dates(ticker, period=f"{years}y")
+        plain_trades = simulate(closes, cfg)
+        filt = simulate_earnings_aware(
+            closes, cfg, dates,
+            earnings_calendar.get(ticker, []))
+        return {"plain": {"trades": plain_trades,
+                          "summary": summarize(plain_trades)},
+                "filtered": filt,
+                "calendar_dates": len(earnings_calendar.get(ticker, []))}
     closes = get_closes(ticker, period=f"{years}y")
     if spread_widths:
         sw = cfg.get("spread_width_sweep") or DEFAULT_SPREAD_WIDTH_SWEEP
@@ -106,6 +120,14 @@ def main() -> int:
                          "per wing width in spread_width_sweep: at a fixed "
                          "skew, to measure where the 1/3-width credit rule "
                          "starts passing and what passing costs in P&L")
+    ap.add_argument("--earnings-calendar", default=None, metavar="FILE",
+                    help="JSON file {ticker: [\"YYYY-MM-DD\", ...]} of known "
+                         "earnings dates: re-run the simulation with the "
+                         "live earnings gate applied and report plain vs "
+                         "filtered side by side (no free source publishes "
+                         "historical earnings calendars, so the dates are "
+                         "caller-supplied; a ticker absent from the file "
+                         "runs unfiltered and is flagged as such)")
     args = ap.parse_args()
 
     with open(args.config) as f:
@@ -118,14 +140,27 @@ def main() -> int:
     else:
         tickers = [cfg["watchlist"][0]]
 
+    earnings_calendar = None
+    if args.earnings_calendar:
+        from options_screener.backtest import load_earnings_calendar
+        earnings_calendar = load_earnings_calendar(args.earnings_calendar)
+
     results, errors = {}, []
     for ticker in tickers:
         try:
             res = backtest_ticker(ticker, cfg, args.years, sweep=args.sweep,
                                   regimes=args.regimes, spreads=args.spreads,
-                                  spread_widths=args.spread_widths)
+                                  spread_widths=args.spread_widths,
+                                  earnings_calendar=earnings_calendar)
             results[ticker] = res
-            if args.spread_widths:
+            if earnings_calendar is not None:
+                p, f = res["plain"]["summary"], res["filtered"]["summary"]
+                print(f"[{ticker}] plain {p['trades']} trades "
+                      f"${p['total_pnl']:+,.2f}; earnings-filtered "
+                      f"{f['trades']} trades ${f['total_pnl']:+,.2f} "
+                      f"({len(res['filtered']['skipped'])} entries skipped, "
+                      f"{res['calendar_dates']} calendar dates)")
+            elif args.spread_widths:
                 sw = (cfg.get("spread_width_sweep")
                       or DEFAULT_SPREAD_WIDTH_SWEEP)
                 narrow = res[sw["widths"][0]]["summary"]
@@ -165,7 +200,12 @@ def main() -> int:
         except Exception:  # never let one ticker kill the run
             errors.append(f"{ticker}: unexpected error\n{traceback.format_exc(limit=3)}")
 
-    if args.spread_widths:
+    if earnings_calendar is not None:
+        payload = build_earnings_payload(results, cfg)
+        md_path, json_path = write_reports(payload, args.out_dir,
+                                           "backtest-earnings",
+                                           render_earnings_markdown)
+    elif args.spread_widths:
         sw = cfg.get("spread_width_sweep") or DEFAULT_SPREAD_WIDTH_SWEEP
         payload = build_width_payload(results, cfg, sw["widths"], sw["skew"])
         md_path, json_path = write_reports(payload, args.out_dir,

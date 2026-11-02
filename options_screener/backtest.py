@@ -120,6 +120,40 @@ def simulate_trade(prices, entry_day, dte, sigma, cfg, exits=None):
     }
 
 
+def _run_simulation(prices, cfg, exits=None, earnings_gate=None):
+    """Shared simulation loop. Returns (trades, skipped_entries).
+
+    `earnings_gate`, when given, is a callable (entry_day, dte) -> an
+    earnings `date` inside that entry's option window, or None. A gated
+    entry is never opened: it is recorded in `skipped_entries` and the
+    next attempt moves up by `entry_interval_days` only (no position was
+    opened, so there is no exit day to advance past). Without a gate the
+    skipped list is always empty and behavior is exactly `simulate`'s.
+    """
+    bt = cfg["backtest"]
+    dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
+                                  + cfg["strategy"]["dte_max"]) // 2
+    window, interval = bt["iv_window"], bt["entry_interval_days"]
+    n = len(prices)
+
+    trades, skipped = [], []
+    day = window  # first entry needs trailing history for the IV proxy
+    while day + dte < n:
+        if earnings_gate is not None:
+            hit = earnings_gate(day, dte)
+            if hit is not None:
+                skipped.append({"entry_day": day, "dte": dte,
+                                "earnings_date": hit.isoformat()})
+                day += interval
+                continue
+        sigma = estimate_iv(prices, day, window,
+                            bt["iv_multiplier"], bt["iv_fallback"])
+        trade = simulate_trade(prices, day, dte, sigma, cfg, exits=exits)
+        trades.append(trade)
+        day = max(trade["exit_day"] + 1, day + interval)
+    return trades, skipped
+
+
 def simulate(prices, cfg, exits=None):
     """Run the strategy over a price series. Returns a list of trade dicts.
 
@@ -128,20 +162,7 @@ def simulate(prices, cfg, exits=None):
     Trades that cannot complete are never opened. `exits` overrides the exit
     rules from config (sensitivity sweep), without mutating cfg.
     """
-    bt = cfg["backtest"]
-    dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
-                                  + cfg["strategy"]["dte_max"]) // 2
-    window, interval = bt["iv_window"], bt["entry_interval_days"]
-    n = len(prices)
-
-    trades = []
-    day = window  # first entry needs trailing history for the IV proxy
-    while day + dte < n:
-        sigma = estimate_iv(prices, day, window,
-                            bt["iv_multiplier"], bt["iv_fallback"])
-        trade = simulate_trade(prices, day, dte, sigma, cfg, exits=exits)
-        trades.append(trade)
-        day = max(trade["exit_day"] + 1, day + interval)
+    trades, _ = _run_simulation(prices, cfg, exits=exits)
     return trades
 
 
@@ -989,6 +1010,214 @@ def render_width_markdown(payload):
                 "average, so narrowing the live band alone would not "
                 "make the rule pass here.")
         lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Earnings-aware backtest filter (v10)
+#
+# The live screener (v9) skips any signal whose option window contains a
+# known earnings date, but the plain backtest traded straight through
+# earnings windows — so its P&L described a strategy the screener would
+# never actually run. This mode closes that gap: it re-runs the same
+# simulation with the same gate and reports plain vs filtered side by
+# side, so the cost (or saving) of skipping earnings windows is measured
+# rather than assumed.
+#
+# Honest limitation, stated in the report: no free source publishes
+# historical earnings calendars, so the backtester cannot fetch them.
+# Earnings dates come from a caller-supplied calendar (a JSON file of
+# ticker -> [ISO dates] for the CLI, or date lists in code). A ticker
+# with no calendar dates runs unfiltered and says so — an empty calendar
+# is a data gap, never evidence of no earnings. The window rule is the
+# same as the live gate: entry date through entry date + DTE calendar
+# days, inclusive on both ends (earnings_status from earnings.py).
+#
+# The gate is also config-gated like the live one: with earnings.enabled
+# false or earnings.exclude false the filtered run equals the plain run
+# (flag-only mode trades through, same as the live screener) and the
+# report says the gate was inactive.
+# ---------------------------------------------------------------------------
+
+import json as _json
+from datetime import timedelta as _timedelta
+
+from .earnings import earnings_status as _earnings_status
+from .earnings import parse_earnings_date as _parse_earnings_date
+
+
+def make_earnings_gate(entry_dates, earnings_dates):
+    """Build a gate callable for `_run_simulation`.
+
+    `entry_dates`: one `date` per price index (trading-day dates, in
+    order). `earnings_dates`: iterable of `date` (known announcement
+    dates). Returns gate(entry_day, dte) -> the first earnings date
+    inside [entry_date, entry_date + dte calendar days], or None.
+
+    Raises ValueError if `entry_dates` is empty or its length differs
+    from the price series it will gate — a misaligned calendar must fail
+    loudly, not silently skip the wrong entries.
+    """
+    if not entry_dates:
+        raise ValueError("entry_dates must not be empty")
+    earn = sorted(d for d in earnings_dates if d is not None)
+
+    def gate(entry_day, dte):
+        if entry_day >= len(entry_dates):
+            raise ValueError(
+                f"entry_day {entry_day} beyond entry_dates "
+                f"({len(entry_dates)} entries)")
+        start = entry_dates[entry_day]
+        end = start + _timedelta(days=dte)
+        for e in earn:
+            status, _ = _earnings_status(e, start, end)
+            if status == "inside":
+                return e
+        return None
+
+    return gate
+
+
+def load_earnings_calendar(path):
+    """Load a JSON earnings calendar: {ticker: ["YYYY-MM-DD", ...]}.
+
+    Unparseable dates are dropped (a garbage calendar entry is an
+    "unknown", same as the live gate's rule), and tickers with no usable
+    dates map to an empty list. Raises on a missing file or non-object
+    JSON — a calendar that cannot be read must not silently mean "no
+    earnings anywhere".
+    """
+    with open(path) as f:
+        raw = _json.load(f)
+    if not isinstance(raw, dict):
+        raise ValueError("earnings calendar must be a JSON object "
+                         "{ticker: [dates]}")
+    calendar = {}
+    for ticker, dates in raw.items():
+        parsed = []
+        if isinstance(dates, (list, tuple)):
+            for d in dates:
+                got = _parse_earnings_date(d)
+                if got is not None:
+                    parsed.append(got)
+        calendar[ticker] = sorted(set(parsed))
+    return calendar
+
+
+def simulate_earnings_aware(prices, cfg, entry_dates, earnings_dates,
+                            exits=None):
+    """Run the simulation with the earnings gate applied.
+
+    Returns {"trades", "skipped", "summary", "gate_active"} where
+    "skipped" lists each gated entry (entry_day, dte, earnings_date).
+    When the config gate is inactive (earnings.enabled false or
+    earnings.exclude false) the run equals the plain simulation and
+    "gate_active" is False. `entry_dates` must align with `prices`
+    (same length); a mismatch raises ValueError.
+    """
+    ecfg = cfg.get("earnings", {}) or {}
+    gate_active = bool(ecfg.get("enabled", True)
+                       and ecfg.get("exclude", True))
+    if not prices:
+        return {"trades": [], "skipped": [], "summary": summarize([]),
+                "gate_active": gate_active}
+    if len(entry_dates) != len(prices):
+        raise ValueError(
+            f"entry_dates ({len(entry_dates)}) must align with prices "
+            f"({len(prices)})")
+    gate = (make_earnings_gate(entry_dates, earnings_dates)
+            if gate_active else None)
+    trades, skipped = _run_simulation(prices, cfg, exits=exits,
+                                      earnings_gate=gate)
+    return {"trades": trades, "skipped": skipped,
+            "summary": summarize(trades), "gate_active": gate_active}
+
+
+def build_earnings_payload(results, cfg):
+    """results: {ticker: {"plain": {"trades", "summary"},
+    "filtered": simulate_earnings_aware result}} -> report payload."""
+    return {
+        "mode": "Earnings-aware backtest",
+        "strategy": "cash-secured puts: ~30 delta, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "Earnings gate mirrors the live screener (v9): an entry is "
+            "skipped when a KNOWN earnings date falls inside its option "
+            "window (entry date through entry date + DTE calendar days, "
+            "inclusive). A skipped entry is never opened; the next "
+            "attempt moves up by entry_interval_days.",
+            "Historical earnings dates are caller-supplied (no free "
+            "source publishes them). A ticker with no calendar dates "
+            "runs unfiltered and is flagged as such — an empty calendar "
+            "is a data gap, never evidence of no earnings.",
+            "This comparison is descriptive: the filtered run shows what "
+            "the live gate would have done to past model trades. It does "
+            "not prove skipping earnings helps or hurts next period.",
+        ],
+        "tickers": results,
+    }
+
+
+def render_earnings_markdown(payload):
+    """Human-readable plain-vs-filtered earnings report."""
+    lines = ["# Options Screener — Earnings-Aware Backtest (research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy (trailing realized vol x "
+             "1.15) — this is NOT historical option-chain data. The "
+             "filtered run applies the live screener's earnings gate; "
+             "the plain run does not. Results are illustrative research, "
+             "not expected returns. See Assumptions.",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             ""]
+    lines.append("| Ticker | Plain trades | Plain P&L | Filtered trades | "
+                 "Filtered P&L | Skipped entries | Gate |")
+    lines.append("|--------|--------------|-----------|-----------------|"
+                 "--------------|-----------------|------|")
+    for ticker, res in payload["tickers"].items():
+        plain, filt = res["plain"]["summary"], res["filtered"]["summary"]
+        gate = "active" if res["filtered"]["gate_active"] else "inactive"
+        if not res["filtered"]["gate_active"]:
+            skipped_note = "0 (gate off)"
+        elif not res.get("calendar_dates"):
+            skipped_note = f"{len(res['filtered']['skipped'])} (no calendar)"
+        else:
+            skipped_note = str(len(res["filtered"]["skipped"]))
+        lines.append(
+            f"| {ticker} | {plain['trades']} | "
+            f"${plain['total_pnl']:+,.2f} | {filt['trades']} | "
+            f"${filt['total_pnl']:+,.2f} | {skipped_note} | {gate} |")
+    for ticker, res in payload["tickers"].items():
+        filt = res["filtered"]
+        if not filt["skipped"]:
+            continue
+        lines.append("")
+        lines.append(f"## {ticker} — skipped entries")
+        lines.append("")
+        lines.append("| Entry day | DTE | Earnings date |")
+        lines.append("|-----------|-----|---------------|")
+        for s in filt["skipped"]:
+            lines.append(f"| day {s['entry_day']} | {s['dte']} | "
+                         f"{s['earnings_date']} |")
+        plain, fsum = res["plain"]["summary"], filt["summary"]
+        lines.append("")
+        lines.append(f"Skipping those {len(filt['skipped'])} entries moved "
+                     f"model P&L from ${plain['total_pnl']:+,.2f} "
+                     f"({plain['trades']} trades) to "
+                     f"${fsum['total_pnl']:+,.2f} ({fsum['trades']} "
+                     f"trades) on this period — a description of the "
+                     f"past, not a promise about the next earnings season.")
+    lines.append("")
     lines.append("## Assumptions & limitations")
     lines.append("")
     for a in payload["assumptions"]:

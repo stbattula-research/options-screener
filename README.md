@@ -251,6 +251,25 @@ gap in the data, never evidence that no earnings are coming. Only a
 names the date. A spread shares its short leg's expiry, so an excluded
 signal never produces a spread either.
 
+## Earnings-aware backtest (v10)
+
+The plain backtest traded straight through earnings windows, but the
+live screener (v9) would never take those trades — so its P&L described
+a strategy the screener doesn't run. `python backtest.py
+--earnings-calendar calendar.json` closes the gap: it re-runs the same
+simulation with the same gate (entry date through entry date + DTE
+calendar days, inclusive) and reports plain vs filtered side by side,
+with every skipped entry listed.
+
+Honesty built in: no free source publishes historical earnings
+calendars, so the dates are caller-supplied (`{ticker: ["YYYY-MM-DD",
+...]}`; garbage dates are dropped, a missing file fails loudly). A
+ticker with no calendar dates runs unfiltered and is flagged as such in
+the report — an empty calendar is a data gap, never evidence of no
+earnings. With `earnings.exclude: false` or `enabled: false` in config,
+the filtered run equals the plain run and the report says the gate was
+inactive, matching the live screener's flag-only behavior.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -285,6 +304,12 @@ signal never produces a spread either.
   window contains a known earnings date are skipped, with the date named
   in the skip reason; unknown calendar dates render as `unknown`, never
   as safe; spreads inherit the gate via the shared expiry).
+- v10: ✅ earnings-aware backtest (shipped 2026-11-02: `python backtest.py
+  --earnings-calendar calendar.json` re-runs the simulation with the v9
+  gate applied and reports plain vs filtered P&L side by side with every
+  skipped entry listed; calendars are caller-supplied JSON because no
+  free source publishes historical earnings dates, and a ticker with no
+  calendar dates is flagged as unfiltered, not assumed earnings-free).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime

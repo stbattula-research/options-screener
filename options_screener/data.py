@@ -28,6 +28,27 @@ def get_closes(ticker: str, period: str = "1y") -> list:
     return closes
 
 
+def get_closes_with_dates(ticker: str, period: str = "1y"):
+    """Daily closes paired with their trading-day dates.
+
+    Returns (closes, dates) with one `date` per close, in order — the
+    pairing the earnings-aware backtest needs to map each simulated
+    entry day to a calendar window. Raises DataError on failure, like
+    `get_closes`.
+    """
+    try:
+        hist = yf.Ticker(ticker).history(period=period, auto_adjust=True)
+    except Exception as exc:  # network / API breakage
+        raise DataError(f"{ticker}: price history fetch failed: {exc}")
+    if hist is None or hist.empty or "Close" not in hist.columns:
+        raise DataError(f"{ticker}: no price history returned")
+    closes = [float(c) for c in hist["Close"].tolist()]
+    dates = [idx.date() for idx in hist.index.tolist()]
+    if len(closes) < 2 or len(dates) != len(closes):
+        raise DataError(f"{ticker}: price history too short")
+    return closes, dates
+
+
 def get_expirations(ticker: str) -> list:
     """Option expiration dates (YYYY-MM-DD strings); raises DataError."""
     try:
