@@ -270,6 +270,27 @@ earnings. With `earnings.exclude: false` or `enabled: false` in config,
 the filtered run equals the plain run and the report says the gate was
 inactive, matching the live screener's flag-only behavior.
 
+## Earnings-aware spread backtest (v11)
+
+The v9 live gate already covers spreads — a spread shares the short
+leg's expiry, so an excluded CSP signal never produces a spread — but
+the v7/v8 spread backtests kept trading straight through earnings
+windows, so their P&L described spread trades the screener would never
+open. `python backtest.py --spreads --earnings-calendar calendar.json`
+closes that gap: it runs the spread simulation twice per skew (plain,
+then with the v9 gate applied) and reports plain vs filtered side by
+side, with every skipped spread entry listed per skew.
+
+The same honesty rules apply as v10: caller-supplied calendars, empty
+calendar flagged as a data gap, gate-off runs equal the plain run.
+One extra caveat, carried from v7: per-skew entry timing can shift
+after a skip (exit timing differs by skew), so the clean comparison is
+plain vs filtered *within* one skew, not across skews. Live smoke
+(AAPL 1y, one calendar date 2026-05-05): 5 entries skipped at every
+skew — the same 35-day-window / 5-day-cadence effect v10 measured —
+and filtered P&L ran below plain on that period at all four skews.
+Descriptive, not a reason to change the live gate.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -310,6 +331,12 @@ inactive, matching the live screener's flag-only behavior.
   skipped entry listed; calendars are caller-supplied JSON because no
   free source publishes historical earnings dates, and a ticker with no
   calendar dates is flagged as unfiltered, not assumed earnings-free).
+- v11: ✅ earnings-aware spread backtest (shipped 2026-11-04: `python
+  backtest.py --spreads --earnings-calendar calendar.json` runs the
+  spread simulation twice per skew — plain, then with the v9 gate
+  applied — and reports plain vs filtered side by side with every
+  skipped spread entry listed per skew; closes the gap the v7/v8 spread
+  backtests left, since the live v9 gate already covers spreads).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime

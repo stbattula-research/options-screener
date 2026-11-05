@@ -81,6 +81,8 @@ backtest_sweep:
 # per skew value (same entries/strikes/exits, only leg pricing changes) to
 # isolate the skew effect on net credit and on the live 1/3-width credit
 # rule. Run: python backtest.py --spreads --ticker SPY
+# v11: combine with --earnings-calendar for the earnings-aware spread
+# backtest (plain vs gated per skew); the live v9 gate already covers spreads.
 spread_backtest:
   skews: [0.0, 1.0, 2.0, 4.0]  # 0 = flat Black-Scholes; 2 ~= observed SPY put skew
   width_pct: 0.02               # narrow end of the live spread: 2-6% band

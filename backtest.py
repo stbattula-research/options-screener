@@ -12,6 +12,9 @@ Usage:
     python backtest.py [--config config.yaml] [--out-dir reports]
                        [--ticker SPY | --all] [--years 3] [--sweep]
                        [--regimes] [--spreads] [--spread-widths]
+                       [--earnings-calendar calendar.json]
+    Combine --spreads with --earnings-calendar for the v11
+    earnings-aware spread backtest (plain vs gated per skew).
 """
 
 import argparse
@@ -28,6 +31,7 @@ from options_screener.backtest import (DEFAULT_SPREAD_BACKTEST,
                                        build_backtest_payload,
                                        build_earnings_payload,
                                        build_regime_payload,
+                                       build_spread_earnings_payload,
                                        build_spread_payload,
                                        build_sweep_payload,
                                        build_width_payload,
@@ -35,12 +39,16 @@ from options_screener.backtest import (DEFAULT_SPREAD_BACKTEST,
                                        render_backtest_markdown,
                                        render_earnings_markdown,
                                        render_regime_markdown,
+                                       render_spread_earnings_markdown,
                                        render_spread_markdown,
                                        render_sweep_markdown,
                                        render_width_markdown,
                                        simulate, simulate_earnings_aware,
+                                       simulate_spreads,
+                                       simulate_spreads_earnings_aware,
                                        split_by_iv_regime,
-                                       summarize, sweep_exit_rules,
+                                       summarize, summarize_spreads,
+                                       sweep_exit_rules,
                                        sweep_skew_spreads,
                                        sweep_width_spreads)
 from options_screener.data import DataError, get_closes, get_closes_with_dates
@@ -51,6 +59,21 @@ def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
                     earnings_calendar=None):
     if earnings_calendar is not None:
         closes, dates = get_closes_with_dates(ticker, period=f"{years}y")
+        if spreads:
+            sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
+            per_skew = {}
+            for skew in sb["skews"]:
+                plain_trades = simulate_spreads(closes, cfg, skew,
+                                                sb["width_pct"])
+                filt = simulate_spreads_earnings_aware(
+                    closes, cfg, skew, sb["width_pct"], dates,
+                    earnings_calendar.get(ticker, []))
+                per_skew[skew] = {
+                    "plain": {"trades": plain_trades,
+                              "summary": summarize_spreads(plain_trades)},
+                    "filtered": filt}
+            return {"skews": per_skew,
+                    "calendar_dates": len(earnings_calendar.get(ticker, []))}
         plain_trades = simulate(closes, cfg)
         filt = simulate_earnings_aware(
             closes, cfg, dates,
@@ -127,7 +150,9 @@ def main() -> int:
                          "filtered side by side (no free source publishes "
                          "historical earnings calendars, so the dates are "
                          "caller-supplied; a ticker absent from the file "
-                         "runs unfiltered and is flagged as such)")
+                         "runs unfiltered and is flagged as such). "
+                         "Combine with --spreads for the earnings-aware "
+                         "spread backtest (plain vs gated per skew).")
     args = ap.parse_args()
 
     with open(args.config) as f:
@@ -153,7 +178,19 @@ def main() -> int:
                                   spread_widths=args.spread_widths,
                                   earnings_calendar=earnings_calendar)
             results[ticker] = res
-            if earnings_calendar is not None:
+            if earnings_calendar is not None and args.spreads:
+                sb = (cfg.get("spread_backtest")
+                      or DEFAULT_SPREAD_BACKTEST)
+                first = sb["skews"][0]
+                pair = res["skews"][first]
+                p, f = pair["plain"]["summary"], pair["filtered"]["summary"]
+                print(f"[{ticker}] spreads skew {first}: plain "
+                      f"{p['trades']} trades ${p['total_pnl']:+,.2f}; "
+                      f"earnings-filtered {f['trades']} trades "
+                      f"${f['total_pnl']:+,.2f} "
+                      f"({len(pair['filtered']['skipped'])} entries skipped, "
+                      f"{res['calendar_dates']} calendar dates)")
+            elif earnings_calendar is not None:
                 p, f = res["plain"]["summary"], res["filtered"]["summary"]
                 print(f"[{ticker}] plain {p['trades']} trades "
                       f"${p['total_pnl']:+,.2f}; earnings-filtered "
@@ -200,7 +237,14 @@ def main() -> int:
         except Exception:  # never let one ticker kill the run
             errors.append(f"{ticker}: unexpected error\n{traceback.format_exc(limit=3)}")
 
-    if earnings_calendar is not None:
+    if earnings_calendar is not None and args.spreads:
+        sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
+        payload = build_spread_earnings_payload(results, cfg, sb["skews"],
+                                                sb["width_pct"])
+        md_path, json_path = write_reports(payload, args.out_dir,
+                                           "backtest-spread-earnings",
+                                           render_spread_earnings_markdown)
+    elif earnings_calendar is not None:
         payload = build_earnings_payload(results, cfg)
         md_path, json_path = write_reports(payload, args.out_dir,
                                            "backtest-earnings",

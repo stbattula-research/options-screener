@@ -1228,3 +1228,168 @@ def render_earnings_markdown(payload):
                  "risking capital._")
     lines.append("")
     return "\n".join(lines)
+
+
+# Earnings-aware spread backtest (v11)
+#
+# v9's live gate already covers spreads (the spread shares the short
+# leg's expiry, so an excluded CSP signal never produces a spread),
+# but the v7/v8 spread backtests kept trading straight through
+# earnings windows — their P&L described spread trades the live
+# screener would never have opened. This mode closes that gap the
+# same way v10 did for plain CSPs: run the spread simulation twice
+# per skew (plain, then with the v9 gate applied) and report both
+# side by side. Per-skew entry timing can still shift after a skip
+# (exit timing differs by skew, as in v7), so the clean comparison
+# is the per-skew plain-vs-filtered pair, not across skews.
+# ---------------------------------------------------------------------------
+
+def simulate_spreads_earnings_aware(prices, cfg, skew, width_pct,
+                                    entry_dates, earnings_dates):
+    """Run the spread simulation with the earnings gate applied.
+
+    Mirrors `simulate_earnings_aware` for spreads: returns {"trades",
+    "skipped", "summary", "gate_active"} where "summary" is
+    `summarize_spreads` (so avg credit/width and the credit-rule pass
+    rate are reported for the filtered run too). A gated entry is
+    never opened; the next attempt moves up by entry_interval_days.
+    When the config gate is inactive the run equals the plain spread
+    simulation and "gate_active" is False. `entry_dates` must align
+    with `prices` (same length); a mismatch raises ValueError.
+    """
+    ecfg = cfg.get("earnings", {}) or {}
+    gate_active = bool(ecfg.get("enabled", True)
+                       and ecfg.get("exclude", True))
+    if not prices:
+        return {"trades": [], "skipped": [],
+                "summary": summarize_spreads([]),
+                "gate_active": gate_active}
+    if len(entry_dates) != len(prices):
+        raise ValueError(
+            f"entry_dates ({len(entry_dates)}) must align with prices "
+            f"({len(prices)})")
+    gate = (make_earnings_gate(entry_dates, earnings_dates)
+            if gate_active else None)
+
+    bt = cfg["backtest"]
+    dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
+                                  + cfg["strategy"]["dte_max"]) // 2
+    window, interval = bt["iv_window"], bt["entry_interval_days"]
+    n = len(prices)
+
+    trades, skipped = [], []
+    day = window
+    while day + dte < n:
+        if gate is not None:
+            hit = gate(day, dte)
+            if hit is not None:
+                skipped.append({"entry_day": day, "dte": dte,
+                                "earnings_date": hit.isoformat()})
+                day += interval
+                continue
+        sigma = estimate_iv(prices, day, window,
+                            bt["iv_multiplier"], bt["iv_fallback"])
+        trade = simulate_spread_trade(prices, day, dte, sigma, cfg, skew,
+                                      width_pct)
+        trades.append(trade)
+        day = max(trade["exit_day"] + 1, day + interval)
+    return {"trades": trades, "skipped": skipped,
+            "summary": summarize_spreads(trades),
+            "gate_active": gate_active}
+
+
+def build_spread_earnings_payload(results, cfg, skews, width_pct):
+    """results: {ticker: {"skews": {skew: {"plain": {"trades", "summary"},
+    "filtered": simulate_spreads_earnings_aware result}},
+    "calendar_dates": int}} -> report payload."""
+    return {
+        "mode": "Earnings-aware spread backtest",
+        "skews": skews,
+        "width_pct": width_pct,
+        "strategy": "bull put spreads over ~30-delta CSP strikes, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "Earnings gate mirrors the live screener (v9): an entry is "
+            "skipped when a KNOWN earnings date falls inside its option "
+            "window (entry date through entry date + DTE calendar days, "
+            "inclusive). A skipped spread entry is never opened; the "
+            "next attempt moves up by entry_interval_days.",
+            "Historical earnings dates are caller-supplied (no free "
+            "source publishes them). A ticker with no calendar dates "
+            "runs unfiltered and is flagged as such — an empty calendar "
+            "is a data gap, never evidence of no earnings.",
+            "This comparison is descriptive: the filtered run shows what "
+            "the live gate would have done to past model spread trades. "
+            "It does not prove skipping earnings helps or hurts next "
+            "period, and per-skew entry timing may shift after a skip, "
+            "so compare plain vs filtered within one skew.",
+        ],
+        "tickers": results,
+    }
+
+
+def render_spread_earnings_markdown(payload):
+    """Human-readable plain-vs-filtered spread report, one table per ticker."""
+    lines = ["# Options Screener — Earnings-Aware Spread Backtest "
+             "(research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy — this is NOT historical "
+             "option-chain data. The filtered run applies the live "
+             "screener's earnings gate to spread entries; the plain run "
+             "does not. Results are illustrative research, not expected "
+             "returns. See Assumptions.",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             f"**Spread width:** {payload['width_pct']:.0%} of the short "
+             "strike. **Skews:** "
+             + ", ".join(str(s) for s in payload["skews"]) + ".",
+             ""]
+    for ticker, res in payload["tickers"].items():
+        lines.append(f"## {ticker}")
+        lines.append("")
+        lines.append("| Skew | Plain trades | Plain P&L | Filtered trades | "
+                     "Filtered P&L | Skipped | Credit/width (plain) | Gate |")
+        lines.append("|------|--------------|-----------|-----------------|"
+                     "--------------|---------|----------------------|------|")
+        for skew in payload["skews"]:
+            pair = res["skews"][skew]
+            plain, filt = pair["plain"]["summary"], pair["filtered"]["summary"]
+            gate = "active" if pair["filtered"]["gate_active"] else "inactive"
+            if not pair["filtered"]["gate_active"]:
+                skipped_note = "0 (gate off)"
+            elif not res.get("calendar_dates"):
+                skipped_note = (f"{len(pair['filtered']['skipped'])} "
+                                "(no calendar)")
+            else:
+                skipped_note = str(len(pair["filtered"]["skipped"]))
+            cf = plain["avg_credit_fraction"]
+            cf_cell = f"{cf:.3f}" if cf is not None else "—"
+            lines.append(
+                f"| {skew} | {plain['trades']} | "
+                f"${plain['total_pnl']:+,.2f} | {filt['trades']} | "
+                f"${filt['total_pnl']:+,.2f} | {skipped_note} | "
+                f"{cf_cell} | {gate} |")
+        for skew in payload["skews"]:
+            filt = res["skews"][skew]["filtered"]
+            if not filt["skipped"]:
+                continue
+            lines.append("")
+            lines.append(f"### {ticker} — skipped spread entries (skew {skew})")
+            lines.append("")
+            lines.append("| Entry day | DTE | Earnings date |")
+            lines.append("|-----------|-----|---------------|")
+            for s in filt["skipped"]:
+                lines.append(f"| day {s['entry_day']} | {s['dte']} | "
+                             f"{s['earnings_date']} |")
+        lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)
