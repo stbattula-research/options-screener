@@ -40,6 +40,22 @@ def _earnings_cell(s: dict) -> str:
     return earn["date"]
 
 
+def _dividend_cell(s: dict) -> str:
+    """Render the dividend cell: the ex-date when known, 'unknown' when the
+    calendar had nothing, '—' when the feature is disabled. A date flagged
+    with ⚠ means the ex-date falls inside the window but exclusion is off
+    (the default) — the signal prints, and the user decides."""
+    div = s.get("dividends") or {}
+    status = div.get("status")
+    if status == "disabled":
+        return "—"
+    if status == "unknown" or not div.get("date"):
+        return "unknown"
+    if status == "inside":
+        return f"{div['date']} ⚠"
+    return div["date"]
+
+
 def build_report_payload(results: dict, cfg: dict, as_of: str | None = None) -> dict:
     """Assemble the JSON-serializable report payload."""
     spread_cfg = cfg.get("spread", {})
@@ -56,6 +72,7 @@ def build_report_payload(results: dict, cfg: dict, as_of: str | None = None) -> 
                        ("enabled", "min_width_pct", "max_width_pct",
                         "min_credit_fraction")} if spread_cfg else None,
             "earnings": cfg.get("earnings", {}),
+            "dividends": cfg.get("dividends", {}),
             "paper": cfg.get("paper", {}).get("enabled", False),
         },
         "disclaimer": DISCLAIMER,
@@ -135,8 +152,8 @@ def render_markdown(payload: dict) -> str:
         lines.append(f"## Signals ({len(signals)})")
         lines.append("")
         lines.append("| Ticker | Underlying | Strike | Expiry | DTE | Δ | IV | "
-                     "IV rank | Premium | Ann. yield | Bid/Ask | OI | Breakeven | Earnings |")
-        lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
+                     "IV rank | Premium | Ann. yield | Bid/Ask | OI | Breakeven | Earnings | Dividend |")
+        lines.append("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|")
         for s in signals:
             anny = f"{s['annualized_yield']:.1%}" if s["annualized_yield"] is not None else "n/a"
             lines.append(
@@ -144,7 +161,7 @@ def render_markdown(payload: dict) -> str:
                 f"{s['expiry']} | {s['dte']} | {s['delta']:.2f} | {s['iv']:.2%} | "
                 f"{_iv_rank_cell(s)} | {s['premium_pct']:.2%} | {anny} | "
                 f"${s['bid']:.2f}/${s['ask']:.2f} | {s['open_interest']} | "
-                f"${s['breakeven']:.2f} | {_earnings_cell(s)} |")
+                f"${s['breakeven']:.2f} | {_earnings_cell(s)} | {_dividend_cell(s)} |")
         lines.append("")
         lines.append("## Exit plan (per signal)")
         lines.append("")
@@ -225,6 +242,16 @@ def render_markdown(payload: dict) -> str:
         "for a ticker, the Earnings column says `unknown`: that is a gap in "
         "the data, not evidence of no earnings. With `exclude: false` the "
         "signal still prints, flagged with its earnings date (⚠).",
+        "- Dividend flag: a known ex-dividend date inside the option window "
+        "is shown in the Dividend column (⚠) but the signal still prints — "
+        "the stock drops by roughly the dividend on the ex-date, nudging "
+        "the underlying toward the short strike and raising early-assignment "
+        "odds if the put is in the money near the date, but for a ~30-delta "
+        "OTM put that is a nudge, not an overnight gap, so exclusion is "
+        "opt-in (`dividends.exclude`, default off) rather than the default. "
+        "When the calendar has no ex-date, the column says `unknown`: a gap "
+        "in the data, not evidence of no dividend. The dividend amount is "
+        "not shown — yfinance does not publish it reliably.",
         "- Deltas are Black-Scholes estimates using a fixed risk-free rate "
         "assumption; broker greeks may differ slightly.",
         "- Signals are candidates for *research*, not orders. Nothing here "

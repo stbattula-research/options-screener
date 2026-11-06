@@ -20,9 +20,10 @@ import yaml
 
 from options_screener.alerts import (run_alerts, signal_key, spread_key)
 from options_screener.data import (DataError, get_closes, get_expirations,
-                                   get_next_earnings, get_put_chain,
-                                   pick_expiry)
+                                   get_next_dividend, get_next_earnings,
+                                   get_put_chain, pick_expiry)
 from options_screener import exits as exits_mod
+from options_screener.dividends import apply_dividend_gate
 from options_screener.earnings import apply_earnings_gate
 from options_screener.ivhistory import (iv_rank, load_observations,
                                         record_observation)
@@ -94,6 +95,18 @@ def screen_ticker(ticker: str, cfg: dict) -> dict:
                 "reason": f"{expiry} ({dte} DTE): {gate['reason']}",
                 "marks": marks, "underlying": round(underlying, 2)}
 
+    # Dividend gate: a known ex-date inside the window is flagged in the
+    # report by default (dividends.exclude is False unless the user opts
+    # in — the effect on a ~30-delta OTM put is a nudge, not an earnings
+    # gap). With exclude on, the signal is skipped like an earnings skip.
+    # The spread inherits the same flag — it shares the short leg's expiry.
+    dgate = apply_dividend_gate(best, get_next_dividend(ticker),
+                                date.today(), cfg)
+    if dgate["excluded"]:
+        return {"status": "skipped", "ticker": ticker,
+                "reason": f"{expiry} ({dte} DTE): {dgate['reason']}",
+                "marks": marks, "underlying": round(underlying, 2)}
+
     spread = None
     if cfg.get("spread", {}).get("enabled", False):
         spreads, _ = find_spreads(puts, signals, underlying, expiry, dte, cfg)
@@ -102,7 +115,8 @@ def screen_ticker(ticker: str, cfg: dict) -> dict:
             spread.update({"ticker": ticker,
                            "underlying": round(underlying, 2),
                            "exit_plan": spread_exit_plan(spread, cfg),
-                           "earnings": best.get("earnings")})
+                           "earnings": best.get("earnings"),
+                           "dividends": best.get("dividends")})
     return {"status": "signal", "signal": best, "spread": spread,
             "marks": marks, "underlying": round(underlying, 2)}
 

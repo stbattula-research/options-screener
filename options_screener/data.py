@@ -128,3 +128,51 @@ def get_next_earnings(ticker: str):
     except Exception:
         return None
     return None
+
+
+def get_next_dividend(ticker: str):
+    """Next ex-dividend date for `ticker` as a `date`, or None if unknown.
+
+    Like `get_next_earnings`, this NEVER raises: yfinance's calendar data
+    is patchy (ETFs and non-payers have no ex-date; some tickers return
+    nothing), and a missing date is an "unknown" to flag, not a reason to
+    kill the whole run. Returns None on any fetch/parse failure.
+
+    Sources, in order: the calendar's "Ex-Dividend Date" (dict or
+    DataFrame shape), then `Ticker.info["exDividendDate"]` (epoch seconds)
+    as a fallback for tickers whose calendar omits it.
+    """
+    from options_screener.dividends import parse_dividend_date
+
+    ticker_obj = yf.Ticker(ticker)
+    try:
+        cal = ticker_obj.calendar
+    except Exception:
+        cal = None
+    if cal is not None:
+        if isinstance(cal, dict):
+            dates = cal.get("Ex-Dividend Date")
+            if dates:
+                first = dates[0] if isinstance(dates, (list, tuple)) else dates
+                parsed = parse_dividend_date(first)
+                if parsed is not None:
+                    return parsed
+        else:
+            # Some yfinance versions return a DataFrame with an
+            # "Ex-Dividend Date" column instead of a dict.
+            try:
+                col = cal["Ex-Dividend Date"]
+                values = col.tolist() if hasattr(col, "tolist") else list(col)
+                if values:
+                    parsed = parse_dividend_date(values[0])
+                    if parsed is not None:
+                        return parsed
+            except Exception:
+                pass
+    try:
+        info = ticker_obj.info
+        if isinstance(info, dict):
+            return parse_dividend_date(info.get("exDividendDate"))
+    except Exception:
+        return None
+    return None

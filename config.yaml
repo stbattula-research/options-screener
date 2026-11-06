@@ -104,6 +104,18 @@ earnings:
   enabled: true
   exclude: true
 
+# v12 dividend / ex-date awareness: a known ex-dividend date inside the
+# option window is FLAGGED in the report by default (the stock drops by
+# roughly the dividend on the ex-date, nudging the underlying toward the
+# short strike and raising early-assignment odds if the put is ITM near
+# the date). Unlike the v9 earnings gate, exclusion is OFF by default —
+# the effect on a ~30-delta OTM put is modest, not an overnight gap.
+# Set exclude: true to skip flagged signals; enabled: false turns the
+# feature off entirely. A missing calendar date renders as "unknown".
+dividends:
+  enabled: true
+  exclude: false
+
 # v3 alerting: email + webhook on NEW qualifying signals only (deduped via a
 # local state file). Opt-in: enabled must be true AND the channel's env vars
 # set. Run with `python screener.py --alerts` (or `--alerts-dry-run`).

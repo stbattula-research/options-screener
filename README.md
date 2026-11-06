@@ -291,6 +291,25 @@ skew — the same 35-day-window / 5-day-cadence effect v10 measured —
 and filtered P&L ran below plain on that period at all four skews.
 Descriptive, not a reason to change the live gate.
 
+## Dividend / ex-date awareness (v12)
+
+A known ex-dividend date inside the option window is now shown in a
+Dividend column on the signals table — and, unlike the v9 earnings
+gate, the signal still prints. The reason is the size of the effect:
+on the ex-date the stock drops by roughly the dividend, which nudges
+the underlying toward the short strike and raises early-assignment
+odds if the put is in the money near the date — a real but modest
+effect on a ~30-delta OTM put, not an overnight gap. Exclusion is
+opt-in (`dividends.exclude: true` in config.yaml); the default is flag,
+don't exclude. Spreads inherit the flag via the shared expiry.
+
+The same honesty rules apply as v9: the ex-date comes from yfinance's
+calendar (with `Ticker.info["exDividendDate"]` as a fallback), a
+missing date renders as `unknown` — a gap in the data, never evidence
+of no dividend — and the dividend amount is not shown, because
+yfinance does not publish it reliably. A stale amount would be worse
+than none.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -337,6 +356,13 @@ Descriptive, not a reason to change the live gate.
   applied — and reports plain vs filtered side by side with every
   skipped spread entry listed per skew; closes the gap the v7/v8 spread
   backtests left, since the live v9 gate already covers spreads).
+- v12: ✅ dividend / ex-date awareness (shipped 2026-11-06: a known
+  ex-dividend date inside the option window is flagged in a Dividend
+  column — ⚠ when inside — and the signal still prints by default,
+  because the effect on a ~30-delta OTM put is a nudge, not an earnings
+  gap; exclusion is opt-in via `dividends.exclude`; unknown calendar
+  dates render as `unknown`, and no dividend amount is shown since
+  yfinance does not publish it reliably).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime
