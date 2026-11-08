@@ -152,3 +152,7 @@ paper:
   open_from_alerts: true  # auto-open a paper position per newly fired alert
   contracts: 1            # paper contracts per position (research sizing)
   max_open: 10            # cap on simultaneous paper positions
+  earnings_check: true    # re-check next earnings vs [today, expiry] at
+                          # every mark; informational only, never exits a
+                          # position — a position can become exposed after
+                          # opening (date announced later / unknown at entry)

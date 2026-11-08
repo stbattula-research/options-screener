@@ -91,6 +91,17 @@ def _position_label(p: dict) -> str:
     return f"${p['strike']:.0f} put {p['expiry']}"
 
 
+def _position_earnings_cell(p: dict) -> str:
+    """Render a paper position's earnings-exposure cell. '—' when the
+    position was never earnings-checked (opened before v13, or the check
+    is off in config); otherwise the shared signal rendering — the date
+    with ⚠ when earnings fall inside the remaining window, 'unknown'
+    when the calendar had nothing."""
+    if "earnings" not in p:
+        return "—"
+    return _earnings_cell(p)
+
+
 def render_paper_section(paper: dict) -> list:
     """Markdown for the paper position-tracking section."""
     lines = ["## Paper positions (research)", "",
@@ -107,19 +118,20 @@ def render_paper_section(paper: dict) -> list:
     if closed:
         lines.append("### Closed today")
         lines.append("")
-        lines.append("| Ticker | Position | Opened | Exit | P&L/contract |")
-        lines.append("|---|---|---|---|---|")
+        lines.append("| Ticker | Position | Opened | Exit | P&L/contract | Earnings |")
+        lines.append("|---|---|---|---|---|---|")
         for c in closed:
             lines.append(
                 f"| {c['ticker']} | {_position_label(c)} | {c['opened']} | "
-                f"{c['exit_reason']} | ${c['realized']:+.2f} |")
+                f"{c['exit_reason']} | ${c['realized']:+.2f} | "
+                f"{_position_earnings_cell(c)} |")
         lines.append("")
     if open_:
         lines.append("### Open")
         lines.append("")
         lines.append("| Ticker | Position | Entry credit | Mark | "
-                     "Unrealized | DTE | Days held |")
-        lines.append("|---|---|---|---|---|---|---|")
+                     "Unrealized | DTE | Days held | Earnings |")
+        lines.append("|---|---|---|---|---|---|---|---|")
         for p in open_:
             unreal = (f"${p['last_unrealized']:+.2f}"
                       if p.get("last_unrealized") is not None else "stale")
@@ -130,8 +142,17 @@ def render_paper_section(paper: dict) -> list:
             lines.append(
                 f"| {p['ticker']} | {_position_label(p)} | "
                 f"${p['entry_credit']:.2f} | {mark} | {unreal} | "
-                f"{dte} | {held} |")
+                f"{dte} | {held} | {_position_earnings_cell(p)} |")
         lines.append("")
+    lines.append("Earnings exposure is re-checked at every mark against the "
+                 "position's remaining window (today to expiry) and shown "
+                 "with ⚠ when a known date falls inside it. It is "
+                 "informational only — a position never exits early on "
+                 "earnings; exits stay mechanical. A position can become "
+                 "exposed after opening, when the date is announced later "
+                 "or was unknown at entry; `unknown` is a gap in the "
+                 "calendar data, not evidence of no earnings.")
+    lines.append("")
     return lines
 
 
@@ -261,7 +282,10 @@ def render_markdown(payload: dict) -> str:
         "day's chain. A position only exits via the mechanical rules above; "
         "a missing quote or an unparseable expiry holds the position as "
         "stale rather than guessing. Closed positions are never re-opened "
-        "by later alerts. State lives in `positions/` (git-ignored).",
+        "by later alerts. State lives in `positions/` (git-ignored). "
+        "Earnings exposure is re-checked at every mark against the "
+        "position's remaining window and shown in the Earnings column — "
+        "informational only, it never triggers an exit.",
     ]
     return "\n".join(lines) + "\n"
 

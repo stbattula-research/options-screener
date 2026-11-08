@@ -21,6 +21,7 @@ import math
 import os
 from datetime import date
 
+from .earnings import earnings_status
 from .filters import quote_stats
 
 STATE_FILENAME = "positions.json"
@@ -42,7 +43,7 @@ def open_from_signal(sig: dict, opened: str | None = None) -> dict:
     """Build a paper CSP position from a screener signal dict."""
     opened = opened or date.today().isoformat()
     credit = float(sig["mid"])
-    return {
+    pos = {
         "key": csp_key(sig["ticker"], sig["expiry"], sig["strike"]),
         "kind": "csp",
         "ticker": sig["ticker"],
@@ -58,13 +59,18 @@ def open_from_signal(sig: dict, opened: str | None = None) -> dict:
         "breakeven": sig.get("breakeven"),
         "status": "open",
     }
+    # What was known at entry: the v9 gate already attached the signal's
+    # earnings info, so the position records it; later marks refresh it.
+    if sig.get("earnings"):
+        pos["earnings"] = dict(sig["earnings"])
+    return pos
 
 
 def open_from_spread(sp: dict, opened: str | None = None) -> dict:
     """Build a paper bull-put-spread position from a spread dict."""
     opened = opened or date.today().isoformat()
     credit = float(sp["net_credit"])
-    return {
+    pos = {
         "key": spread_key(sp["ticker"], sp["expiry"],
                           sp["short_strike"], sp["long_strike"]),
         "kind": "spread",
@@ -82,6 +88,40 @@ def open_from_spread(sp: dict, opened: str | None = None) -> dict:
         "breakeven": sp.get("breakeven"),
         "status": "open",
     }
+    # Spreads share the short leg's expiry, so the signal's earnings info
+    # (if the spread dict carries it) is the position's entry exposure.
+    if sp.get("earnings"):
+        pos["earnings"] = dict(sp["earnings"])
+    return pos
+
+
+def attach_earnings_exposure(position: dict, next_earnings,
+                             as_of) -> dict:
+    """Attach earnings exposure to a paper position, as of a mark date.
+
+    The window is the position's REMAINING life — [as_of, expiry] —
+    reusing the v9 `earnings_status` (inclusive both ends). A position
+    can become exposed after it opens: the earnings date may have been
+    unknown at entry, or announced later. Returns the attached dict
+    {"status": "inside"|"outside"|"unknown", "date": ISO str | None}.
+
+    Never raises: an unparseable expiry or as_of renders "unknown", the
+    same honesty rule as the v9 gate — a missing date is a data gap,
+    never evidence of no earnings.
+    """
+    try:
+        as_of_date = (as_of if isinstance(as_of, date)
+                      else date.fromisoformat(as_of))
+        expiry = date.fromisoformat(position["expiry"])
+    except (ValueError, TypeError, AttributeError, KeyError):
+        position["earnings"] = {"status": "unknown", "date": None}
+        return position["earnings"]
+    status, earn_date = earnings_status(next_earnings, as_of_date, expiry)
+    position["earnings"] = {
+        "status": status,
+        "date": earn_date.isoformat() if earn_date else None,
+    }
+    return position["earnings"]
 
 
 def _per_contract(value_per_share: float, contracts: int) -> float:
@@ -294,11 +334,19 @@ def open_positions(candidates: list, store: dict, max_open: int) -> list:
 
 
 def update_positions(store: dict, marks: dict, exits_cfg: dict,
-                     as_of: str | None = None) -> dict:
+                     as_of: str | None = None,
+                     earnings_map: dict | None = None) -> dict:
     """Mark every open position against today's chain and apply exit rules.
 
     marks: {position_key: snapshot dict} — the caller builds snapshots from
     the day's chains; a position with no entry holds as `stale`.
+    earnings_map: optional {ticker: next earnings `date` | None}. When
+    supplied, each position's earnings exposure is refreshed against its
+    remaining window [as_of, expiry] — a position can become exposed
+    after opening, when a date is announced later or was unknown at
+    entry. The flag is informational only: it never changes the exit
+    rules. When no map is supplied, a position keeps whatever earnings
+    info it already carries.
     Returns {"updated": [...statuses...], "closed_today": [...positions...]}.
     """
     as_of = as_of or date.today().isoformat()
@@ -309,7 +357,11 @@ def update_positions(store: dict, marks: dict, exits_cfg: dict,
         if snap is None:
             snap = {"date": as_of, "underlying": None,
                     "mark": None, "dte": None}
+        if earnings_map is not None and pos["ticker"] in earnings_map:
+            attach_earnings_exposure(pos, earnings_map[pos["ticker"]],
+                                     as_of)
         status = evaluate(pos, snap, exits_cfg)
+        status["earnings"] = pos.get("earnings")
         pos["last_mark"] = snap["mark"]
         pos["last_dte"] = snap["dte"]
         pos["last_seen"] = as_of

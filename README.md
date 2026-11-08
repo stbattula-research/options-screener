@@ -310,6 +310,23 @@ of no dividend — and the dividend amount is not shown, because
 yfinance does not publish it reliably. A stale amount would be worse
 than none.
 
+## Earnings-aware paper-position marking (v13)
+
+The v9 gate only checks earnings at signal time — but a paper position
+lives 30–45 days, and an earnings date can be announced *after* it
+opens, or was simply unknown when it opened. Every `--paper-track`
+mark now re-checks each open position's ticker against its *remaining*
+window (today to expiry) and records the exposure on the position:
+`inside` with the date (shown ⚠ in the Paper positions tables), `outside`,
+or `unknown` when the calendar has nothing. Positions also carry what
+was known at entry, copied from the signal's v9 gate result.
+
+The flag is informational only, stated in the report itself: a position
+never exits early on earnings — exits stay mechanical (50% profit /
+21 DTE / 2x-premium loss). The same honesty rules apply as v9: an
+`unknown` calendar is a data gap, never evidence of no earnings, and
+the check is config-gated (`paper.earnings_check`, default on).
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -363,6 +380,12 @@ than none.
   gap; exclusion is opt-in via `dividends.exclude`; unknown calendar
   dates render as `unknown`, and no dividend amount is shown since
   yfinance does not publish it reliably).
+- v13: ✅ earnings-aware paper-position marking (shipped 2026-11-08: every
+  `--paper-track` mark re-checks each open position's next earnings date
+  against its remaining window and flags it in the Paper positions
+  tables — informational only, exits stay mechanical; a position can
+  become exposed after opening when the date is announced later or was
+  unknown at entry).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime
