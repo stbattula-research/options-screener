@@ -115,6 +115,31 @@ def render_paper_section(paper: dict) -> list:
                  f"Closed this run: {len(closed)} · "
                  f"Still open: {len(open_)}.")
     lines.append("")
+    newly = paper.get("newly_exposed") or []
+    if newly:
+        lines.append("### Newly earnings-exposed today")
+        lines.append("")
+        for p in newly:
+            earn_date = (p.get("earnings") or {}).get("date")
+            lines.append(f"- **{p['ticker']}** {_position_label(p)} "
+                         f"(opened {p['opened']}): earnings {earn_date} "
+                         f"now falls inside the remaining window. "
+                         f"Informational only — the position stays open "
+                         f"and exits stay mechanical.")
+        alerts = paper.get("exposure_alerts") or {}
+        if alerts.get("fired"):
+            lines.append(f"Alert sent via {', '.join(alerts['channels'])}.")
+        elif alerts.get("would_fire"):
+            lines.append("Alert would fire (dry run — nothing sent).")
+        elif alerts.get("status") == "skipped":
+            lines.append("Alert not sent — run with --alerts to send "
+                         "exposure alerts.")
+        elif alerts.get("channel_errors"):
+            lines.append("Alert attempted but the channel failed: "
+                         + "; ".join(f"{ch}: {err}" for ch, err
+                                     in alerts["channel_errors"].items())
+                         + ".")
+        lines.append("")
     if closed:
         lines.append("### Closed today")
         lines.append("")
@@ -285,7 +310,12 @@ def render_markdown(payload: dict) -> str:
         "by later alerts. State lives in `positions/` (git-ignored). "
         "Earnings exposure is re-checked at every mark against the "
         "position's remaining window and shown in the Earnings column — "
-        "informational only, it never triggers an exit.",
+        "informational only, it never triggers an exit. When a still-open "
+        "position becomes earnings-exposed at a mark (v14), the report "
+        "names it and — on runs invoked with `--alerts` — the same "
+        "email/webhook channels send one alert per position+earnings-date, "
+        "deduped so a re-run never re-fires; a `--paper-track`-only run "
+        "records the exposure but sends nothing.",
     ]
     return "\n".join(lines) + "\n"
 

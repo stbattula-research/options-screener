@@ -347,16 +347,24 @@ def update_positions(store: dict, marks: dict, exits_cfg: dict,
     entry. The flag is informational only: it never changes the exit
     rules. When no map is supplied, a position keeps whatever earnings
     info it already carries.
-    Returns {"updated": [...statuses...], "closed_today": [...positions...]}.
+    Returns {"updated": [...statuses...], "closed_today": [...positions...],
+             "newly_exposed": [...positions...]} — "newly_exposed" holds
+    the still-open positions whose earnings exposure flipped to "inside"
+    at this mark (from outside/unknown, or to a different date while
+    inside). A position that closes at this mark is never newly exposed:
+    there is nothing left to warn about. The caller decides what to do
+    with the list (v14 alerts on it); the positions themselves are the
+    live store dicts, already carrying the refreshed exposure.
     """
     as_of = as_of or date.today().isoformat()
-    updated, closed = [], []
+    updated, closed, newly_exposed = [], [], []
     still_open = []
     for pos in store["open"]:
         snap = marks.get(pos["key"])
         if snap is None:
             snap = {"date": as_of, "underlying": None,
                     "mark": None, "dte": None}
+        prev_earnings = dict(pos.get("earnings") or {})
         if earnings_map is not None and pos["ticker"] in earnings_map:
             attach_earnings_exposure(pos, earnings_map[pos["ticker"]],
                                      as_of)
@@ -378,6 +386,13 @@ def update_positions(store: dict, marks: dict, exits_cfg: dict,
             closed.append(pos)
         else:
             still_open.append(pos)
+            new_earnings = pos.get("earnings") or {}
+            if (new_earnings.get("status") == "inside"
+                    and (prev_earnings.get("status") != "inside"
+                         or prev_earnings.get("date")
+                         != new_earnings.get("date"))):
+                newly_exposed.append(pos)
     store["open"] = still_open
     store["closed"].extend(closed)
-    return {"updated": updated, "closed_today": closed}
+    return {"updated": updated, "closed_today": closed,
+            "newly_exposed": newly_exposed}

@@ -18,7 +18,9 @@ from datetime import date
 
 import yaml
 
-from options_screener.alerts import (run_alerts, signal_key, spread_key)
+from options_screener.alerts import (exposure_alert_items, run_alerts,
+                                     run_exposure_alerts, signal_key,
+                                     spread_key)
 from options_screener.data import (DataError, get_closes, get_expirations,
                                    get_next_dividend, get_next_earnings,
                                    get_put_chain, pick_expiry)
@@ -122,7 +124,8 @@ def screen_ticker(ticker: str, cfg: dict) -> dict:
 
 
 def run_paper_tracking(payload: dict, cfg: dict, market: dict,
-                       alerts_result: dict | None) -> dict:
+                       alerts_result: dict | None,
+                       dry_run: bool = False) -> dict:
     """Open paper positions from newly fired alerts; mark and exit-check all
     open positions against today's chains. Returns a report-ready dict."""
     pcfg = cfg.get("paper", {}) or {}
@@ -169,6 +172,37 @@ def run_paper_tracking(payload: dict, cfg: dict, market: dict,
                                         earnings_map=earnings_map)
     exits_mod.save_store(state_dir, store)
 
+    # v14: a position that became earnings-exposed at this mark gets an
+    # alert on the same email/webhook channels as signal alerts — once per
+    # position+date, informational only (it never exits a position).
+    # Exposure alerts only send on runs invoked with --alerts (or
+    # --alerts-dry-run): a --paper-track-only run records the exposure in
+    # the report but sends nothing, so a quiet daily mark never surprises
+    # anyone with mail. alerts_result is None exactly when no alert run
+    # was requested (or alerts.enabled is off).
+    newly_exposed = result["newly_exposed"]
+    exposure_alerts = None
+    if newly_exposed and pcfg.get("exposure_alerts", True):
+        if (alerts_result is None
+                or not cfg.get("alerts", {}).get("enabled", False)):
+            exposure_alerts = {
+                "status": "skipped",
+                "reason": ("exposure alerts need a run with --alerts "
+                           "(alerts.enabled must be on)")}
+            print("[paper-alert] newly exposed position(s) recorded in "
+                  "the report but not sent — run with --alerts to send "
+                  "exposure alerts")
+        else:
+            exposure_alerts = run_exposure_alerts(
+                exposure_alert_items(newly_exposed), cfg,
+                as_of=as_of, dry_run=dry_run)
+            for it in (exposure_alerts["fired"]
+                       or exposure_alerts["would_fire"]):
+                print(f"[paper-alert] {it['ticker']} [{it['kind']}] "
+                      f"{it['reason']}")
+            for ch, err in exposure_alerts["channel_errors"].items():
+                print(f"[paper-alert-error] {ch}: {err}", file=sys.stderr)
+
     for p in opened:
         print(f"[paper] opened {p['ticker']} {p['key'].split('|')[-1]} "
               f"({p['kind']}) @ ${p['entry_credit']:.2f}/share credit")
@@ -177,6 +211,8 @@ def run_paper_tracking(payload: dict, cfg: dict, market: dict,
               f"${c['realized']:+.2f} per contract")
     return {"opened": opened, "open": store["open"],
             "closed_today": result["closed_today"],
+            "newly_exposed": newly_exposed,
+            "exposure_alerts": exposure_alerts,
             "state_dir": state_dir}
 
 
@@ -260,7 +296,8 @@ def main() -> int:
                 build_report_payload(
                     {"signals": signals, "spreads": spreads,
                      "skipped": skipped, "errors": errors}, cfg),
-                cfg, market, alerts_result)
+                cfg, market, alerts_result,
+                dry_run=args.alerts_dry_run)
 
     payload = build_report_payload(
         {"signals": signals, "spreads": spreads,

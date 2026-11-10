@@ -156,3 +156,10 @@ paper:
                           # every mark; informational only, never exits a
                           # position — a position can become exposed after
                           # opening (date announced later / unknown at entry)
+  exposure_alerts: true   # v14: alert (same email/webhook channels as
+                          # alerts:) when a still-open position BECOMES
+                          # earnings-exposed at a mark; once per
+                          # position+date, informational only. Only sends on
+                          # runs invoked with --alerts (or --alerts-dry-run);
+                          # a --paper-track-only run records the exposure in
+                          # the report but sends nothing.

@@ -176,22 +176,61 @@ def send_webhook(url: str, payload: dict) -> None:
             raise RuntimeError(f"webhook returned HTTP {resp.status}")
 
 
-def run_alerts(payload: dict, cfg: dict, dry_run: bool = False) -> dict:
-    """Evaluate rules, dedupe, send on enabled channels, persist state.
+def exposure_key(pos: dict, earn_date: str) -> str:
+    """Dedupe key for a newly-exposed paper position: the position key
+    plus the earnings date, so a moved announcement date fires once for
+    the new date instead of re-firing (or never firing) for the old one."""
+    return f"{pos['key']}|earnings:{earn_date}"
 
-    Returns {"fired": [...], "would_fire": [...], "channel_errors": {...},
-             "channels": [...]}. dry_run prints/evaluates without sending or
-    persisting state.
-    """
+
+def exposure_alert_items(newly_exposed: list) -> list:
+    """Build alert items for positions that just became earnings-exposed.
+
+    Each item is the same shape `run_alerts` items use (kind/key/ticker/
+    reason/detail) so the shared delivery path handles them. Positions
+    without a known earnings date are skipped — there is nothing to
+    name, and `unknown` is never evidence of exposure."""
+    items = []
+    for p in newly_exposed:
+        earn_date = (p.get("earnings") or {}).get("date")
+        if not earn_date:
+            continue
+        if p["kind"] == "spread":
+            label = (f"${p['short_strike']:.2f}/${p['long_strike']:.2f} "
+                     f"spread exp {p['expiry']}")
+        else:
+            label = f"${p['strike']:.2f} put exp {p['expiry']}"
+        items.append({
+            "kind": "earnings_exposure",
+            "key": exposure_key(p, earn_date),
+            "ticker": p["ticker"],
+            "reason": (f"earnings {earn_date} now inside the remaining "
+                       f"window (opened {p['opened']}, "
+                       f"expires {p['expiry']})"),
+            "detail": (f"paper {label}, entry credit "
+                       f"${p['entry_credit']:.2f}/share — informational "
+                       f"only, exits stay mechanical"),
+        })
+    return items
+
+
+def render_exposure_subject(as_of: str, items: list) -> str:
+    tickers = sorted({it["ticker"] for it in items})
+    return (f"[options-screener] {len(items)} paper position(s) newly "
+            f"earnings-exposed ({as_of}): {', '.join(tickers)}")
+
+
+def _deliver(items: list, cfg: dict, as_of: str, subject_fn,
+             dry_run: bool = False) -> dict:
+    """Shared delivery path: dedupe against the alert state file, send on
+    the enabled channels, persist only what at least one channel
+    delivered. A failing channel is reported, never fatal. `subject_fn`
+    takes (as_of, new_items) and renders the email subject."""
     acfg = cfg.get("alerts", {}) or {}
-    rules = acfg.get("rules", {}) or {}
-    as_of = payload.get("as_of") or date.today().isoformat()
-
     state_dir = acfg.get("state_dir", "alert_state")
     state = load_state(state_dir)
 
-    candidates = evaluate(payload, rules)
-    new_items = dedupe(candidates, state)
+    new_items = dedupe(items, state)
 
     result = {"fired": [], "would_fire": [], "channel_errors": {},
               "channels": []}
@@ -202,7 +241,7 @@ def run_alerts(payload: dict, cfg: dict, dry_run: bool = False) -> dict:
         result["would_fire"] = new_items
         return result
 
-    subject = render_email_subject(as_of, new_items)
+    subject = subject_fn(as_of, new_items)
     body = render_email_body(as_of, new_items)
 
     email_cfg = acfg.get("email", {}) or {}
@@ -238,3 +277,32 @@ def run_alerts(payload: dict, cfg: dict, dry_run: bool = False) -> dict:
         state["last_run"] = as_of
         save_state(state_dir, state)
     return result
+
+
+def run_alerts(payload: dict, cfg: dict, dry_run: bool = False) -> dict:
+    """Evaluate rules, dedupe, send on enabled channels, persist state.
+
+    Returns {"fired": [...], "would_fire": [...], "channel_errors": {...},
+             "channels": [...]}. dry_run prints/evaluates without sending or
+    persisting state.
+    """
+    acfg = cfg.get("alerts", {}) or {}
+    rules = acfg.get("rules", {}) or {}
+    as_of = payload.get("as_of") or date.today().isoformat()
+
+    candidates = evaluate(payload, rules)
+    return _deliver(candidates, cfg, as_of, render_email_subject, dry_run)
+
+
+def run_exposure_alerts(items: list, cfg: dict, as_of: str | None = None,
+                        dry_run: bool = False) -> dict:
+    """Alert on paper positions that just became earnings-exposed (v14).
+
+    Same channels, dedupe state file, and return shape as `run_alerts` —
+    the only difference is the subject line. Fires once per
+    position+earnings-date (see `exposure_key`); a re-run of the same day
+    does not re-fire. dry_run reports what would fire without sending or
+    persisting state.
+    """
+    as_of = as_of or date.today().isoformat()
+    return _deliver(items, cfg, as_of, render_exposure_subject, dry_run)

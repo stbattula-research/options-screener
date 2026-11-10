@@ -327,6 +327,27 @@ never exits early on earnings — exits stay mechanical (50% profit /
 `unknown` calendar is a data gap, never evidence of no earnings, and
 the check is config-gated (`paper.earnings_check`, default on).
 
+## Alerting on newly-exposed paper positions (v14)
+
+v13 only *flagged* exposure in the report — a position that became
+earnings-exposed after opening sat there silently until someone read
+the daily report. v14 detects the flip at the mark (from outside or
+unknown to inside, or inside to a *different* announced date) and
+alerts on it through the same email/webhook channels as signal alerts,
+with the same rules: credentials env-only, disclaimer in every alert,
+dedupe so a re-run never re-fires, once per position+earnings-date, and
+a failing channel is reported, never fatal. A position that closes at
+the same mark is never alerted on — there is nothing left to warn
+about.
+
+Two deliberate limits: the alert is informational only (it never exits
+a position — exits stay mechanical), and it only sends on runs invoked
+with `--alerts` (or `--alerts-dry-run`). A `--paper-track`-only run
+records the exposure in the report's new "Newly earnings-exposed
+today" section but sends nothing, so a quiet daily mark never surprises
+anyone with mail. Config-gated with `paper.exposure_alerts`
+(default on).
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -386,6 +407,13 @@ the check is config-gated (`paper.earnings_check`, default on).
   tables — informational only, exits stay mechanical; a position can
   become exposed after opening when the date is announced later or was
   unknown at entry).
+- v14: ✅ alerting on newly-exposed paper positions (shipped 2026-11-10:
+  when a still-open position becomes earnings-exposed at a mark, the
+  report names it in a "Newly earnings-exposed today" section and — on
+  runs invoked with `--alerts` — the same email/webhook channels send
+  one alert per position+earnings-date, deduped so re-runs never re-fire;
+  a `--paper-track`-only run records the exposure but sends nothing.
+  Informational only, exits stay mechanical).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime
