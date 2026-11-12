@@ -256,7 +256,9 @@ def test_exposure_webhook_success_marks_fired_and_dedupes(
     assert res["channels"] == ["webhook"]
     assert len(sent) == 1
     assert "[EARNINGS_EXPOSURE] NVDA" in sent[0][1]["text"]
-    assert "2026-11-17" in sent[0][1]["text"]
+    # the fixture date is TODAY + 7 days, so it moves with the run date
+    # (was hardcoded 2026-11-17 when written on Nov 10; went stale Nov 11)
+    assert (TODAY + timedelta(days=7)).isoformat() in sent[0][1]["text"]
     # Second run: same position+date is deduped, nothing re-fires.
     res2 = run_exposure_alerts([_item()], cfg, as_of=_as_of())
     assert res2["fired"] == [] and res2["would_fire"] == []

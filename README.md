@@ -348,6 +348,27 @@ today" section but sends nothing, so a quiet daily mark never surprises
 anyone with mail. Config-gated with `paper.exposure_alerts`
 (default on).
 
+## Multi-ticker regime comparison (v15)
+
+v6 split one ticker at a time, and on SPY the high-IV regime won more
+often and made more, at the cost of a bigger drawdown. v15 asks whether
+that pattern generalizes: `python backtest.py --regime-compare --all
+--years 2` runs the same per-ticker median split across the watchlist
+and compares the *gaps* (high minus low — P&L, win rate, max drawdown)
+ticker by ticker, ranked by P&L gap, with a cross-ticker summary
+(how many tickers the high-IV regime won on, median gaps).
+
+The honest limit is the one v6 already named, now load-bearing: each
+ticker's regimes are defined by *that* ticker's median entry IV, and
+medians differ wildly per ticker (SPY 0.15, NVDA 0.42, AMD 0.58 on the
+2y smoke run), so absolute IV levels are never compared across
+tickers — only the within-ticker gaps are, and the median-IV column is
+printed per ticker so the difference is visible. A row is flagged
+"thin" when either regime has fewer than 10 trades, and thin rows
+never count toward the summary. Descriptive only, like v6: the median
+is known only after the whole period, so nothing here is a live entry
+filter.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -414,6 +435,19 @@ anyone with mail. Config-gated with `paper.exposure_alerts`
   one alert per position+earnings-date, deduped so re-runs never re-fire;
   a `--paper-track`-only run records the exposure but sends nothing.
   Informational only, exits stay mechanical).
+- v15: ✅ multi-ticker regime comparison (shipped 2026-11-12: `python
+  backtest.py --regime-compare` runs the v6 median split per ticker and
+  compares the high-minus-low gaps across the watchlist, ranked by P&L
+  gap with a cross-ticker summary; medians differ per ticker so only
+  the gaps are compared, never absolute IV levels; thin rows (<10
+  trades per regime) never count toward the summary. On a 2y, 15-ticker
+  smoke run the high-IV regime made more on 13 of 15 tickers (median
+  gap +$2,547.74) and won more often on 10 of 15 — but the median
+  max-drawdown gap was only +$7.66, so across the watchlist the extra
+  premium did *not* come with systematically bigger drawdowns the way
+  SPY alone suggested in v6. MSFT and NVDA were the exceptions:
+  high-IV entries lost more and won less often there. AMD's +$18,280
+  gap is an outlier row, not the story — the median gap is).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime

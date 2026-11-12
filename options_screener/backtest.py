@@ -431,6 +431,229 @@ def render_regime_markdown(payload):
 
 
 # ---------------------------------------------------------------------------
+# Multi-ticker regime comparison (v15)
+#
+# v6 answered the regime question for one ticker at a time: on SPY the
+# high-IV regime won more often and made more, at the cost of a bigger
+# drawdown. v15 asks whether that pattern generalizes: run the same
+# per-ticker median split across the watchlist and compare the GAPS
+# (high minus low) — win-rate gap, P&L gap, drawdown gap — ticker by
+# ticker, ranked by P&L gap.
+#
+# The honest limit, carried in the payload and the report: each ticker's
+# regimes are defined by THAT ticker's median entry IV, and medians
+# differ wildly per ticker (a "high" IV for SPY can be a "low" IV for
+# NVDA). So absolute IV levels are NOT comparable across tickers, and
+# this report never compares them. What it compares is the pattern:
+# within each ticker, did high-IV entries beat low-IV entries, and by
+# how much? The median-IV column is printed per ticker so the reader
+# can see how different "high" is from one row to the next.
+#
+# Same honesty rules as v6: entry IV is the trailing-realized-vol
+# proxy, not traded implied vol; the median is only known after the
+# whole period, so the split is descriptive, never a live entry filter.
+# ---------------------------------------------------------------------------
+
+MIN_REGIME_TRADES = 10  # a regime with fewer trades is flagged "thin"
+
+
+def _median(values):
+    """Median of a non-empty list of numbers; None when empty."""
+    if not values:
+        return None
+    vals = sorted(values)
+    n = len(vals)
+    mid = n // 2
+    if n % 2:
+        return vals[mid]
+    return (vals[mid - 1] + vals[mid]) / 2.0
+
+
+def compare_regime_splits(splits):
+    """Compare per-ticker IV-regime splits by their high-minus-low gaps.
+
+    `splits`: {ticker: split_by_iv_regime(trades)} -> {"rows": [...],
+    "summary": {...}}. Rows are ranked by P&L gap, highest first; rows
+    with no measurable gap (an empty regime) sort last. A row is
+    "thin" when either regime has fewer than MIN_REGIME_TRADES trades
+    — its gaps are printed but must be read as noise, not signal.
+    """
+    rows = []
+    for ticker, split in splits.items():
+        lo, hi = split["low"]["summary"], split["high"]["summary"]
+        measurable = lo["trades"] > 0 and hi["trades"] > 0
+        rows.append({
+            "ticker": ticker,
+            "median_iv": split["median_iv"],
+            "low_trades": lo["trades"],
+            "high_trades": hi["trades"],
+            "low_win_rate": lo["win_rate"],
+            "high_win_rate": hi["win_rate"],
+            "low_total_pnl": lo["total_pnl"],
+            "high_total_pnl": hi["total_pnl"],
+            "low_max_drawdown": lo["max_drawdown"],
+            "high_max_drawdown": hi["max_drawdown"],
+            "pnl_gap": (round(hi["total_pnl"] - lo["total_pnl"], 2)
+                        if measurable else None),
+            "win_gap": (round(hi["win_rate"] - lo["win_rate"], 4)
+                        if measurable and hi["win_rate"] is not None
+                        and lo["win_rate"] is not None else None),
+            "dd_gap": (round(hi["max_drawdown"] - lo["max_drawdown"], 2)
+                       if measurable else None),
+            "thin": (not measurable
+                     or min(lo["trades"], hi["trades"]) < MIN_REGIME_TRADES),
+        })
+    rows.sort(key=lambda r: (r["pnl_gap"] is None,
+                             -(r["pnl_gap"] or 0)))
+    readable = [r for r in rows if not r["thin"]]
+    summary = {
+        "tickers_compared": len(rows),
+        "readable_tickers": len(readable),
+        "high_wins_pnl": sum(1 for r in readable
+                             if r["pnl_gap"] is not None
+                             and r["pnl_gap"] > 0),
+        "high_wins_win_rate": sum(1 for r in readable
+                                  if r["win_gap"] is not None
+                                  and r["win_gap"] > 0),
+        "median_pnl_gap": _median([r["pnl_gap"] for r in readable
+                                   if r["pnl_gap"] is not None]),
+        "median_win_gap": _median([r["win_gap"] for r in readable
+                                   if r["win_gap"] is not None]),
+        "median_dd_gap": _median([r["dd_gap"] for r in readable
+                                  if r["dd_gap"] is not None]),
+    }
+    return {"rows": rows, "summary": summary}
+
+
+def build_regime_compare_payload(splits, cfg):
+    """splits: {ticker: split_by_iv_regime(trades)} -> payload."""
+    compared = compare_regime_splits(splits)
+    return {
+        "mode": "Multi-ticker IV-regime comparison",
+        "strategy": "cash-secured puts: ~30 delta, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "Each ticker's regimes are split at that ticker's own median "
+            "entry IV (low: IV <= median, high: IV > median); medians "
+            "differ per ticker, so absolute IV levels are NOT comparable "
+            "across tickers. Only the within-ticker gaps (high minus low) "
+            "are compared — the median-IV column is printed per ticker so "
+            "the reader can see how different 'high' is from row to row.",
+            "Entry IV is the trailing-realized-vol proxy (x 1.15), not "
+            "traded implied vol; a high-IV regime also means larger "
+            "premiums AND larger moves — the gaps show whether the extra "
+            "premium compensated for the extra risk, per ticker.",
+            "This is a description of past model trades, not a rule for "
+            "skipping low- or high-IV entries: the median is only known "
+            "after the whole period, so it cannot be traded in real time.",
+            "A row is flagged thin when either regime has fewer than "
+            f"{MIN_REGIME_TRADES} trades; thin gaps are printed but must "
+            "be read as noise, and thin rows never count toward the "
+            "cross-ticker summary.",
+        ],
+        "rows": compared["rows"],
+        "summary": compared["summary"],
+    }
+
+
+def _compare_cell(value, fmt):
+    return "—" if value is None else fmt.format(value)
+
+
+def render_regime_compare_markdown(payload):
+    """Human-readable multi-ticker regime comparison."""
+    lines = ["# Options Screener — Multi-Ticker IV-Regime Comparison "
+             "(research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy (trailing realized vol x "
+             "1.15) — this is NOT historical option-chain data. Each "
+             "ticker's regimes are split at that ticker's own median "
+             "entry IV, so absolute IV levels are NOT comparable across "
+             "tickers: what is compared here is the *pattern* — within "
+             "each ticker, did high-IV entries beat low-IV entries, and "
+             "by how much?",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             ""]
+    s = payload["summary"]
+    lines.append("## Cross-ticker summary")
+    lines.append("")
+    lines.append(f"- {s['tickers_compared']} tickers compared, "
+                 f"{s['readable_tickers']} with enough trades in both "
+                 "regimes to read.")
+    if s["readable_tickers"]:
+        lines.append(f"- High-IV entries made more than low-IV entries on "
+                     f"{s['high_wins_pnl']} of {s['readable_tickers']} "
+                     "readable tickers, and won more often on "
+                     f"{s['high_wins_win_rate']} of "
+                     f"{s['readable_tickers']}.")
+        lines.append(f"- Median P&L gap (high minus low): "
+                     f"${s['median_pnl_gap']:+,.2f} per contract; median "
+                     f"win-rate gap: {s['median_win_gap']:+.1%}; median "
+                     f"max-drawdown gap: ${s['median_dd_gap']:+,.2f} "
+                     "(positive means the high-IV regime drew down "
+                     "further).")
+    else:
+        lines.append("- No ticker has enough trades in both regimes to "
+                     "summarize — every row is thin. Run more years or "
+                     "more tickers before reading anything into this.")
+    lines.append("")
+    lines.append("## Per-ticker gaps (ranked by P&L gap)")
+    lines.append("")
+    lines.append("| Ticker | Median IV | Low trades | Low win | Low P&L | "
+                 "High trades | High win | High P&L | P&L gap | Win gap | "
+                 "Max-DD gap | Read |")
+    lines.append("|--------|-----------|------------|---------|---------|"
+                 "-------------|----------|----------|---------|---------|"
+                 "------------|------|")
+    for r in payload["rows"]:
+        lines.append(
+            f"| {r['ticker']} | "
+            f"{_compare_cell(r['median_iv'], '{:.4f}')} | "
+            f"{r['low_trades']} | "
+            f"{_compare_cell(r['low_win_rate'], '{:.1%}')} | "
+            f"${r['low_total_pnl']:+,.2f} | "
+            f"{r['high_trades']} | "
+            f"{_compare_cell(r['high_win_rate'], '{:.1%}')} | "
+            f"${r['high_total_pnl']:+,.2f} | "
+            f"{_compare_cell(r['pnl_gap'], '${:+,.2f}')} | "
+            f"{_compare_cell(r['win_gap'], '{:+.1%}')} | "
+            f"{_compare_cell(r['dd_gap'], '${:+,.2f}')} | "
+            f"{'thin ⚠' if r['thin'] else 'readable'} |")
+    lines.append("")
+    lines.append("## How to read this")
+    lines.append("")
+    lines.append("- Read the gaps, not the levels: a $500 P&L gap on a "
+                 "ticker whose median IV is 0.45 and a $500 gap on one "
+                 "whose median is 0.15 are the same pattern at very "
+                 "different volatilities — the median-IV column is there "
+                 "so the difference is visible, not hidden.")
+    lines.append("- A positive P&L gap with a positive drawdown gap is the "
+                 "usual trade: extra premium paid for extra risk. A "
+                 "positive P&L gap with a *negative* drawdown gap would "
+                 "be the interesting row — more money for less pain — "
+                 "and deserves a second look, not a rule change.")
+    lines.append("- Thin rows (⚠) say nothing. A 3-trade regime can show "
+                 "any gap by luck; the summary counts only readable rows.")
+    lines.append("- Never turn any of this into a live rule (\"only trade "
+                 "high-IV tickers\") without re-testing it as a forward "
+                 "rule on unseen data — this comparison is descriptive, "
+                 "not a strategy.")
+    lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
 # Exit-rule sensitivity sweep (v5)
 #
 # The screener's mechanical exit rules (profit target / loss multiple /

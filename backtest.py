@@ -11,10 +11,12 @@ Signals only. This tool never places orders and holds no broker credentials.
 Usage:
     python backtest.py [--config config.yaml] [--out-dir reports]
                        [--ticker SPY | --all] [--years 3] [--sweep]
-                       [--regimes] [--spreads] [--spread-widths]
-                       [--earnings-calendar calendar.json]
+                       [--regimes] [--regime-compare] [--spreads]
+                       [--spread-widths] [--earnings-calendar calendar.json]
     Combine --spreads with --earnings-calendar for the v11
     earnings-aware spread backtest (plain vs gated per skew).
+    --regime-compare runs the v6 split per ticker and compares the
+    high-minus-low gaps across tickers (v15).
 """
 
 import argparse
@@ -30,14 +32,17 @@ from options_screener.backtest import (DEFAULT_SPREAD_BACKTEST,
                                        DEFAULT_SWEEP_GRID,
                                        build_backtest_payload,
                                        build_earnings_payload,
+                                       build_regime_compare_payload,
                                        build_regime_payload,
                                        build_spread_earnings_payload,
                                        build_spread_payload,
                                        build_sweep_payload,
                                        build_width_payload,
+                                       compare_regime_splits,
                                        default_sweep_key, rank_sweep,
                                        render_backtest_markdown,
                                        render_earnings_markdown,
+                                       render_regime_compare_markdown,
                                        render_regime_markdown,
                                        render_spread_earnings_markdown,
                                        render_spread_markdown,
@@ -132,6 +137,12 @@ def main() -> int:
                     help="split the plain backtest into low/high entry-IV "
                          "regimes at each ticker's median entry IV "
                          "(descriptive only, not a live entry filter)")
+    ap.add_argument("--regime-compare", action="store_true",
+                    help="run the v6 regime split per ticker and compare "
+                         "the high-minus-low gaps across tickers, ranked "
+                         "by P&L gap (v15; descriptive only — medians "
+                         "differ per ticker, so only the within-ticker "
+                         "gaps are compared, never absolute IV levels)")
     ap.add_argument("--spreads", action="store_true",
                     help="run the skew-aware bull-put-spread backtest: one "
                          "spread simulation per skew value in "
@@ -174,7 +185,8 @@ def main() -> int:
     for ticker in tickers:
         try:
             res = backtest_ticker(ticker, cfg, args.years, sweep=args.sweep,
-                                  regimes=args.regimes, spreads=args.spreads,
+                                  regimes=args.regimes or args.regime_compare,
+                                  spreads=args.spreads,
                                   spread_widths=args.spread_widths,
                                   earnings_calendar=earnings_calendar)
             results[ticker] = res
@@ -214,6 +226,16 @@ def main() -> int:
                       f"{flat_skew}, avg credit/width "
                       f"{flat['avg_credit_fraction']}, pass rate "
                       f"{flat['credit_rule_pass_rate']}")
+            elif args.regime_compare:
+                row = compare_regime_splits({ticker: res})["rows"][0]
+                gap = (f"${row['pnl_gap']:+,.2f}" if row["pnl_gap"] is not None
+                       else "no gap")
+                print(f"[{ticker}] median IV {res['median_iv']}, "
+                      f"low: {row['low_trades']} trades "
+                      f"${row['low_total_pnl']:+,.2f}, high: "
+                      f"{row['high_trades']} trades "
+                      f"${row['high_total_pnl']:+,.2f}, P&L gap {gap}"
+                      + (" (thin)" if row["thin"] else ""))
             elif args.regimes:
                 med = res["median_iv"]
                 lo, hi = res["low"]["summary"], res["high"]["summary"]
@@ -262,6 +284,11 @@ def main() -> int:
         md_path, json_path = write_reports(payload, args.out_dir,
                                            "backtest-spreads",
                                            render_spread_markdown)
+    elif args.regime_compare:
+        payload = build_regime_compare_payload(results, cfg)
+        md_path, json_path = write_reports(payload, args.out_dir,
+                                           "backtest-regime-compare",
+                                           render_regime_compare_markdown)
     elif args.regimes:
         # results here are per-ticker splits; rebuild plain trade lists for
         # the payload builder (it splits them itself, identically).
