@@ -17,6 +17,9 @@ Usage:
     earnings-aware spread backtest (plain vs gated per skew).
     --regime-compare runs the v6 split per ticker and compares the
     high-minus-low gaps across tickers (v15).
+    --regime-filter runs the v16 forward entry filter: enter only when
+    today's entry IV is above its trailing 252-day median, plain vs
+    filtered side by side over the same warmup start.
 """
 
 import argparse
@@ -27,28 +30,33 @@ from datetime import date
 
 import yaml
 
-from options_screener.backtest import (DEFAULT_SPREAD_BACKTEST,
+from options_screener.backtest import (DEFAULT_REGIME_FILTER,
+                                       DEFAULT_SPREAD_BACKTEST,
                                        DEFAULT_SPREAD_WIDTH_SWEEP,
                                        DEFAULT_SWEEP_GRID,
                                        build_backtest_payload,
                                        build_earnings_payload,
                                        build_regime_compare_payload,
+                                       build_regime_filter_payload,
                                        build_regime_payload,
                                        build_spread_earnings_payload,
                                        build_spread_payload,
                                        build_sweep_payload,
                                        build_width_payload,
+                                       compare_regime_filter,
                                        compare_regime_splits,
                                        default_sweep_key, rank_sweep,
                                        render_backtest_markdown,
                                        render_earnings_markdown,
                                        render_regime_compare_markdown,
+                                       render_regime_filter_markdown,
                                        render_regime_markdown,
                                        render_spread_earnings_markdown,
                                        render_spread_markdown,
                                        render_sweep_markdown,
                                        render_width_markdown,
                                        simulate, simulate_earnings_aware,
+                                       simulate_regime_filtered,
                                        simulate_spreads,
                                        simulate_spreads_earnings_aware,
                                        split_by_iv_regime,
@@ -61,7 +69,20 @@ from options_screener.data import DataError, get_closes, get_closes_with_dates
 
 def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
                     spreads=False, spread_widths=False,
-                    earnings_calendar=None):
+                    earnings_calendar=None, regime_filter=False):
+    if regime_filter:
+        closes = get_closes(ticker, period=f"{years}y")
+        rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
+        lookback = rf.get("lookback_days",
+                          DEFAULT_REGIME_FILTER["lookback_days"])
+        # plain run shares the filtered run's warmup start, so the P&L
+        # delta isolates the filter itself, not the later start
+        warmup = cfg["backtest"]["iv_window"] + lookback
+        plain_trades = simulate(closes, cfg, start_day=warmup)
+        filt = simulate_regime_filtered(closes, cfg)
+        return {"plain": {"trades": plain_trades,
+                          "summary": summarize(plain_trades)},
+                "filtered": filt}
     if earnings_calendar is not None:
         closes, dates = get_closes_with_dates(ticker, period=f"{years}y")
         if spreads:
@@ -154,6 +175,14 @@ def main() -> int:
                          "per wing width in spread_width_sweep: at a fixed "
                          "skew, to measure where the 1/3-width credit rule "
                          "starts passing and what passing costs in P&L")
+    ap.add_argument("--regime-filter", action="store_true",
+                    help="run the v16 forward entry filter: enter only when "
+                         "today's entry IV is above the trailing median of "
+                         "the same IV proxy over regime_filter.lookback_days "
+                         "trading days (default 252), computed only from "
+                         "data available at entry time. Reports plain vs "
+                         "filtered P&L side by side over the same warmup "
+                         "start, with skipped counts and trade share.")
     ap.add_argument("--earnings-calendar", default=None, metavar="FILE",
                     help="JSON file {ticker: [\"YYYY-MM-DD\", ...]} of known "
                          "earnings dates: re-run the simulation with the "
@@ -188,9 +217,17 @@ def main() -> int:
                                   regimes=args.regimes or args.regime_compare,
                                   spreads=args.spreads,
                                   spread_widths=args.spread_widths,
-                                  earnings_calendar=earnings_calendar)
+                                  earnings_calendar=earnings_calendar,
+                                  regime_filter=args.regime_filter)
             results[ticker] = res
-            if earnings_calendar is not None and args.spreads:
+            if args.regime_filter:
+                p, f = res["plain"]["summary"], res["filtered"]["summary"]
+                print(f"[{ticker}] regime filter: plain {p['trades']} trades "
+                      f"${p['total_pnl']:+,.2f}; filtered {f['trades']} trades "
+                      f"${f['total_pnl']:+,.2f} "
+                      f"({len(res['filtered']['skipped'])} skipped, "
+                      f"lookback {res['filtered']['lookback_days']}d)")
+            elif earnings_calendar is not None and args.spreads:
                 sb = (cfg.get("spread_backtest")
                       or DEFAULT_SPREAD_BACKTEST)
                 first = sb["skews"][0]
@@ -259,7 +296,15 @@ def main() -> int:
         except Exception:  # never let one ticker kill the run
             errors.append(f"{ticker}: unexpected error\n{traceback.format_exc(limit=3)}")
 
-    if earnings_calendar is not None and args.spreads:
+    if args.regime_filter:
+        rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
+        lookback = rf.get("lookback_days",
+                          DEFAULT_REGIME_FILTER["lookback_days"])
+        payload = build_regime_filter_payload(results, cfg, lookback)
+        md_path, json_path = write_reports(payload, args.out_dir,
+                                           "backtest-regime-filter",
+                                           render_regime_filter_markdown)
+    elif earnings_calendar is not None and args.spreads:
         sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
         payload = build_spread_earnings_payload(results, cfg, sb["skews"],
                                                 sb["width_pct"])

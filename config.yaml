@@ -68,6 +68,19 @@ backtest:
   iv_multiplier: 1.15     # IV proxy = realized vol x multiplier (variance risk premium)
   iv_fallback: 0.25       # used while trailing history is too short
 
+# v16 regime-aware forward entry filter: tests whether the v6/v15 high-IV
+# advantage is tradable, instead of merely descriptive. At each entry
+# attempt, enter ONLY when today's entry IV is above the median of the
+# same IV proxy over the trailing lookback_days trading days, computed
+# only from data available at entry time (the threshold window ends the
+# day before the entry). The first iv_window + lookback_days days are
+# warmup and never trade. The plain run shares the warmup start, so the
+# P&L delta isolates the filter. One rule, chosen once — the lookback
+# is NOT grid-searched. Run: python backtest.py --regime-filter --all
+regime_filter:
+  lookback_days: 252  # ~1 trading year of trailing entry-IV history
+  mode: "above"       # v16 tests only "above"; "below" is untested
+
 # v5 exit-rule sensitivity sweep: re-runs the simulation over a grid of
 # exit rules to check whether the exits: defaults above are robust or
 # overfit. Grid values are intentionally coarse — this is a robustness

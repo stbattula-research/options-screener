@@ -120,7 +120,8 @@ def simulate_trade(prices, entry_day, dte, sigma, cfg, exits=None):
     }
 
 
-def _run_simulation(prices, cfg, exits=None, earnings_gate=None):
+def _run_simulation(prices, cfg, exits=None, earnings_gate=None,
+                    start_day=None):
     """Shared simulation loop. Returns (trades, skipped_entries).
 
     `earnings_gate`, when given, is a callable (entry_day, dte) -> an
@@ -129,6 +130,12 @@ def _run_simulation(prices, cfg, exits=None, earnings_gate=None):
     next attempt moves up by `entry_interval_days` only (no position was
     opened, so there is no exit day to advance past). Without a gate the
     skipped list is always empty and behavior is exactly `simulate`'s.
+
+    `start_day` is the first entry-attempt day; it defaults to
+    `iv_window` (the first day with trailing history for the IV proxy).
+    Callers that need a later universe — the v16 regime filter, whose
+    trailing-median threshold needs a warmup — pass a later start so the
+    plain and filtered runs attempt entries over the same days.
     """
     bt = cfg["backtest"]
     dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
@@ -137,7 +144,7 @@ def _run_simulation(prices, cfg, exits=None, earnings_gate=None):
     n = len(prices)
 
     trades, skipped = [], []
-    day = window  # first entry needs trailing history for the IV proxy
+    day = window if start_day is None else start_day
     while day + dte < n:
         if earnings_gate is not None:
             hit = earnings_gate(day, dte)
@@ -154,15 +161,19 @@ def _run_simulation(prices, cfg, exits=None, earnings_gate=None):
     return trades, skipped
 
 
-def simulate(prices, cfg, exits=None):
+def simulate(prices, cfg, exits=None, start_day=None):
     """Run the strategy over a price series. Returns a list of trade dicts.
 
     Entries are attempted every `entry_interval_days` trading days (one
     position at a time), each needing `entry_dte` of future data to resolve.
     Trades that cannot complete are never opened. `exits` overrides the exit
     rules from config (sensitivity sweep), without mutating cfg.
+    `start_day` overrides the first entry-attempt day (default: the first
+    day with trailing history for the IV proxy); the v16 regime filter
+    passes its warmup day so plain and filtered runs share one universe.
     """
-    trades, _ = _run_simulation(prices, cfg, exits=exits)
+    trades, _ = _run_simulation(prices, cfg, exits=exits,
+                                start_day=start_day)
     return trades
 
 
@@ -281,6 +292,8 @@ def render_backtest_markdown(payload):
                  "risking capital._")
     lines.append("")
     return "\n".join(lines)
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -1606,6 +1619,333 @@ def render_spread_earnings_markdown(payload):
                 lines.append(f"| day {s['entry_day']} | {s['dte']} | "
                              f"{s['earnings_date']} |")
         lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)
+
+# ---------------------------------------------------------------------------
+# Regime-aware forward entry filter (v16)
+#
+# v6 split past trades at the median entry IV and v15 showed the
+# high-IV regime made more on 13 of 15 tickers — but both reports
+# carried the same warning: the median is only known AFTER the whole
+# period, so neither split is a rule anyone could have traded. This
+# mode tests the tradable version of the idea, and says plainly
+# whether it survives contact with causality.
+#
+# The rule: at each entry attempt, compare today's entry IV (the
+# same trailing-realized-vol proxy the rest of the backtester uses)
+# with the MEDIAN of that same proxy over the trailing lookback_days
+# trading days (default 252, about one year), computed only from data
+# available at entry time — the threshold day range ends the day
+# BEFORE the entry, so today's IV never leaks into its own threshold.
+# Enter only when entry IV is strictly ABOVE the trailing median.
+# The first iv_window + lookback_days days are warmup and never trade,
+# so the threshold is always defined and always causal.
+#
+# Two things the report does NOT do: it does not grid-search the
+# lookback (one rule, chosen once, tested once — a sweep would turn
+# this into an optimizer, and v5 already showed why that matters),
+# and it does not recommend the filter. The plain run shares the
+# filtered run's warmup start, so the P&L delta isolates the filter
+# itself — not the later start — and the report prints the skipped
+# count and the trade share alongside the delta, because a filter
+# that earns more by trading half as often is a different claim from
+# one that earns more by trading better.
+#
+# Honest limits, carried in the payload and the report: entry IV is
+# the trailing-realized-vol proxy, not traded implied vol; in a
+# stationary market the filter passes about half of all attempts by
+# construction (a median splits attempts in half), so a positive P&L
+# delta with a ~50% trade share means the skipped half lost money
+# on this period — it does not promise the next period's low-IV
+# entries lose. A sustained high-vol regime adapts the threshold
+# upward until entries stop passing, which is the correct behavior
+# of a trailing median and also its weakness: the filter chases
+# relative richness, not absolute richness.
+# ---------------------------------------------------------------------------
+
+DEFAULT_REGIME_FILTER = {
+    "lookback_days": 252,  # trailing trading days for the entry-IV median
+    "mode": "above",       # v16 tests only "above": enter when entry IV is
+    # above its trailing median. "below" is an untested variant, not a rule.
+}
+
+MIN_FILTER_TRADES = 5   # filtered side needs this many trades to be readable
+MIN_PLAIN_TRADES = 10   # plain side needs this many trades to be readable
+
+
+def trailing_iv_median(prices, day, lookback_days, window, multiplier,
+                       fallback):
+    """Median of the daily IV proxy over the trailing `lookback_days` days.
+
+    The window is [day - lookback_days, day): it ends the day BEFORE the
+    entry, so today's IV never leaks into its own threshold. Returns
+    None when there is not enough history (day < lookback_days).
+    Raises ValueError when lookback_days < 1.
+    """
+    if lookback_days < 1:
+        raise ValueError("lookback_days must be >= 1")
+    if day < lookback_days:
+        return None
+    ivs = [estimate_iv(prices, d, window, multiplier, fallback)
+           for d in range(day - lookback_days, day)]
+    return _median(ivs)
+
+
+def simulate_regime_filtered(prices, cfg, lookback_days=None, exits=None):
+    """Run the simulation entering only above the trailing IV median.
+
+    Returns {"trades", "skipped", "summary", "lookback_days",
+    "warmup_days", "mode"}. A skipped entry is recorded with its entry
+    IV and the threshold it failed, and the next attempt moves up by
+    `entry_interval_days` only. No trade is ever opened before
+    warmup (iv_window + lookback_days), so the threshold is always
+    defined and always causal. `lookback_days` overrides
+    cfg["regime_filter"]["lookback_days"]; raises ValueError for a
+    lookback below 1. An empty or too-short series returns zero trades
+    and zero skips, never an error.
+    """
+    rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
+    lookback = (lookback_days if lookback_days is not None
+                else rf.get("lookback_days",
+                            DEFAULT_REGIME_FILTER["lookback_days"]))
+    if lookback < 1:
+        raise ValueError("lookback_days must be >= 1")
+    bt = cfg["backtest"]
+    dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
+                                  + cfg["strategy"]["dte_max"]) // 2
+    window, interval = bt["iv_window"], bt["entry_interval_days"]
+    n = len(prices)
+
+    warmup = window + lookback
+    trades, skipped = [], []
+    day = warmup
+    while day + dte < n:
+        sigma = estimate_iv(prices, day, window,
+                            bt["iv_multiplier"], bt["iv_fallback"])
+        threshold = trailing_iv_median(prices, day, lookback, window,
+                                       bt["iv_multiplier"],
+                                       bt["iv_fallback"])
+        if threshold is None or sigma <= threshold:
+            skipped.append({"entry_day": day, "dte": dte,
+                            "entry_iv": round(sigma, 4),
+                            "threshold_iv": (round(threshold, 4)
+                                             if threshold is not None
+                                             else None)})
+            day += interval
+            continue
+        trade = simulate_trade(prices, day, dte, sigma, cfg, exits=exits)
+        trades.append(trade)
+        day = max(trade["exit_day"] + 1, day + interval)
+    return {"trades": trades, "skipped": skipped,
+            "summary": summarize(trades), "lookback_days": lookback,
+            "warmup_days": warmup, "mode": "above"}
+
+
+def compare_regime_filter(results):
+    """Compare plain vs regime-filtered runs, per ticker + cross-ticker.
+
+    `results`: {ticker: {"plain": {"trades", "summary"},
+    "filtered": simulate_regime_filtered result}} -> {"rows": [...],
+    "summary": {...}}. Rows are ranked by P&L delta (filtered minus
+    plain), highest first. A row is "readable" when the plain side has
+    at least MIN_PLAIN_TRADES trades and the filtered side at least
+    MIN_FILTER_TRADES; thin rows are printed but never count toward
+    the summary. A filtered run with zero trades still reports its
+    P&L delta (0 minus the plain total) — the filter skipped
+    everything, which the skipped count makes visible — but its
+    win-rate and drawdown gaps are None, never fake zeros.
+    """
+    rows = []
+    for ticker, res in results.items():
+        plain, filt = res["plain"]["summary"], res["filtered"]["summary"]
+        p_trades, f_trades = plain["trades"], filt["trades"]
+        readable = (p_trades >= MIN_PLAIN_TRADES
+                    and f_trades >= MIN_FILTER_TRADES)
+        win_gap = (round(filt["win_rate"] - plain["win_rate"], 4)
+                   if p_trades and f_trades
+                   and filt["win_rate"] is not None
+                   and plain["win_rate"] is not None else None)
+        dd_gap = (round(filt["max_drawdown"] - plain["max_drawdown"], 2)
+                  if p_trades and f_trades else None)
+        rows.append({
+            "ticker": ticker,
+            "plain_trades": p_trades,
+            "plain_win_rate": plain["win_rate"],
+            "plain_total_pnl": plain["total_pnl"],
+            "plain_max_drawdown": plain["max_drawdown"],
+            "filtered_trades": f_trades,
+            "filtered_win_rate": filt["win_rate"],
+            "filtered_total_pnl": filt["total_pnl"],
+            "filtered_max_drawdown": filt["max_drawdown"],
+            "skipped_entries": len(res["filtered"]["skipped"]),
+            "trade_share": (round(f_trades / p_trades, 4)
+                            if p_trades else None),
+            "pnl_delta": (round(filt["total_pnl"] - plain["total_pnl"], 2)
+                          if p_trades else None),
+            "win_gap": win_gap,
+            "dd_gap": dd_gap,
+            "thin": not readable,
+        })
+    rows.sort(key=lambda r: (r["pnl_delta"] is None,
+                             -(r["pnl_delta"] or 0)))
+    readable_rows = [r for r in rows if not r["thin"]]
+    summary = {
+        "tickers_compared": len(rows),
+        "readable_tickers": len(readable_rows),
+        "filtered_wins_pnl": sum(1 for r in readable_rows
+                                 if r["pnl_delta"] is not None
+                                 and r["pnl_delta"] > 0),
+        "filtered_wins_win_rate": sum(1 for r in readable_rows
+                                      if r["win_gap"] is not None
+                                      and r["win_gap"] > 0),
+        "median_pnl_delta": _median([r["pnl_delta"] for r in readable_rows
+                                     if r["pnl_delta"] is not None]),
+        "median_win_gap": _median([r["win_gap"] for r in readable_rows
+                                   if r["win_gap"] is not None]),
+        "median_dd_gap": _median([r["dd_gap"] for r in readable_rows
+                                  if r["dd_gap"] is not None]),
+        "median_trade_share": _median([r["trade_share"] for r in readable_rows
+                                       if r["trade_share"] is not None]),
+    }
+    return {"rows": rows, "summary": summary}
+
+
+def build_regime_filter_payload(results, cfg, lookback_days):
+    """results: {ticker: {"plain": {...}, "filtered": {...}}} -> payload."""
+    compared = compare_regime_filter(results)
+    return {
+        "mode": "Regime-aware forward entry filter",
+        "lookback_days": lookback_days,
+        "strategy": "cash-secured puts: ~30 delta, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "The filter enters only when the entry IV is strictly above "
+            f"the median of the same IV proxy over the trailing "
+            f"{lookback_days} trading days, computed only from data "
+            "available at entry time (the threshold window ends the day "
+            "before the entry). The first iv_window + lookback_days days "
+            "are warmup and never trade.",
+            "The plain run shares the filtered run's warmup start, so "
+            "both runs attempt entries over the same days and the P&L "
+            "delta isolates the filter itself, not the later start.",
+            "Entry IV is the trailing-realized-vol proxy (x 1.15), not "
+            "traded implied vol; a high-IV entry also means larger "
+            "premiums AND larger moves. In a stationary market the "
+            "filter passes about half of all attempts by construction "
+            "(a median splits attempts in half).",
+            "One rule, chosen once, tested once: the lookback was not "
+            "grid-searched, so this is a forward test of a hypothesis, "
+            "not an optimizer result. Re-test on a different period "
+            "before trusting any delta here.",
+            "A row is readable when the plain side has at least "
+            f"{MIN_PLAIN_TRADES} trades and the filtered side at least "
+            f"{MIN_FILTER_TRADES}; thin rows are printed but never "
+            "count toward the cross-ticker summary.",
+        ],
+        "rows": compared["rows"],
+        "summary": compared["summary"],
+    }
+
+
+def render_regime_filter_markdown(payload):
+    """Human-readable plain-vs-filtered regime-filter report."""
+    lines = ["# Options Screener — Regime-Aware Forward Entry Filter "
+             "(research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy (trailing realized vol x "
+             "1.15) — this is NOT historical option-chain data. v6/v15 "
+             "showed high-IV entries beat low-IV entries *descriptively*, "
+             "but their median is only known after the whole period. "
+             "This mode tests the tradable version: enter only when "
+             "today's entry IV is above the median of the same proxy "
+             "over the trailing "
+             f"{payload['lookback_days']} trading days, computed only "
+             "from data available at entry time. No look-ahead: the "
+             "first warmup days never trade.",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             f"**Filter:** enter only when entry IV > trailing "
+             f"{payload['lookback_days']}-day median of the entry-IV "
+             "proxy. **Plain run:** same warmup start, no filter — the "
+             "P&L delta isolates the filter, not the later start.",
+             ""]
+    s = payload["summary"]
+    lines.append("## Cross-ticker summary")
+    lines.append("")
+    lines.append(f"- {s['tickers_compared']} tickers compared, "
+                 f"{s['readable_tickers']} with enough trades on both "
+                 "sides to read.")
+    if s["readable_tickers"]:
+        lines.append(f"- The filtered run made more than the plain run on "
+                     f"{s['filtered_wins_pnl']} of {s['readable_tickers']} "
+                     "readable tickers, and won more often on "
+                     f"{s['filtered_wins_win_rate']} of "
+                     f"{s['readable_tickers']}.")
+        lines.append(f"- Median P&L delta (filtered minus plain): "
+                     f"${s['median_pnl_delta']:+,.2f} per contract; "
+                     f"median win-rate gap: {s['median_win_gap']:+.1%}; "
+                     f"median max-drawdown gap: "
+                     f"${s['median_dd_gap']:+,.2f} (positive means the "
+                     "filtered run drew down further).")
+        lines.append(f"- Median trade share: {s['median_trade_share']:.0%} "
+                     "of the plain run's trades — in a stationary market "
+                     "the filter passes about half of all attempts by "
+                     "construction, so a positive delta with a ~50% share "
+                     "means the skipped half lost money on this period.")
+    else:
+        lines.append("- No ticker has enough trades on both sides to "
+                     "summarize — every row is thin. Run more years or "
+                     "more tickers before reading anything into this.")
+    lines.append("")
+    lines.append("## Per-ticker results (ranked by P&L delta)")
+    lines.append("")
+    lines.append("| Ticker | Plain trades | Plain P&L | Filtered trades | "
+                 "Filtered P&L | Skipped | Trade share | P&L Δ | Win Δ | "
+                 "Max-DD Δ | Read |")
+    lines.append("|--------|--------------|-----------|-----------------|"
+                 "--------------|---------|-------------|-------|-------|"
+                 "----------|------|")
+    for r in payload["rows"]:
+        lines.append(
+            f"| {r['ticker']} | {r['plain_trades']} | "
+            f"${r['plain_total_pnl']:+,.2f} | {r['filtered_trades']} | "
+            f"${r['filtered_total_pnl']:+,.2f} | {r['skipped_entries']} | "
+            f"{_compare_cell(r['trade_share'], '{:.0%}')} | "
+            f"{_compare_cell(r['pnl_delta'], '${:+,.2f}')} | "
+            f"{_compare_cell(r['win_gap'], '{:+.1%}')} | "
+            f"{_compare_cell(r['dd_gap'], '${:+,.2f}')} | "
+            f"{'thin ⚠' if r['thin'] else 'readable'} |")
+    lines.append("")
+    lines.append("## How to read this")
+    lines.append("")
+    lines.append("- Read the trade share with the delta: a positive delta "
+                 "at a 50% share means the filter earned more while "
+                 "trading half as often — the skipped entries were the "
+                 "losers on this period. A negative delta at a low share "
+                 "means it skipped winners too, and sat out while the "
+                 "plain run worked.")
+    lines.append("- A sustained high-vol regime adapts the threshold "
+                 "upward until entries stop passing: that is the filter "
+                 "working as designed (relative richness, not absolute), "
+                 "and also its weakness — check the skipped count before "
+                 "concluding anything from a 0-trade filtered row.")
+    lines.append("- One period, one lookback, no grid search: a positive "
+                 "median delta is a hypothesis that survived one forward "
+                 "test, not a rule. Re-test on a different period before "
+                 "touching the live screener — and the live screener "
+                 "takes no entry filter from this mode until that "
+                 "re-test happens.")
+    lines.append("")
     lines.append("## Assumptions & limitations")
     lines.append("")
     for a in payload["assumptions"]:

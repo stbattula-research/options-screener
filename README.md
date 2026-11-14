@@ -369,6 +369,32 @@ never count toward the summary. Descriptive only, like v6: the median
 is known only after the whole period, so nothing here is a live entry
 filter.
 
+## Regime-aware forward entry filter (v16)
+
+v6 split past trades at the median entry IV, and v15 showed the high-IV
+regime made more on 13 of 15 tickers — but both reports carried the same
+warning: the median is only known *after* the whole period, so neither
+split is a rule anyone could have traded. v16 tests the tradable version
+of the idea: `python backtest.py --regime-filter --all --years 2` enters
+only when today's entry IV is above the median of the same IV proxy over
+the trailing 252 trading days (about one year), computed only from data
+available at entry time — the threshold window ends the day before the
+entry, so today's IV never leaks into its own threshold. The first
+`iv_window + lookback` days are warmup and never trade, and the plain run
+shares the filtered run's warmup start, so the P&L delta isolates the
+filter itself rather than the later start.
+
+The report prints the skipped count and the trade share next to the delta
+for a reason: in a stationary market the filter passes about half of all
+attempts by construction (a median splits attempts in half), so a positive
+delta at a ~50% trade share means the skipped half lost money on this
+period — it does not promise the next period's low-IV entries lose. The
+lookback was chosen once and never grid-searched, and the report draws no
+rule change from its result: a positive median delta is a hypothesis that
+survived one forward test, not a live entry filter, and the live screener
+takes no filter from this mode until the rule is re-tested on a different
+period.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -448,6 +474,15 @@ filter.
   SPY alone suggested in v6. MSFT and NVDA were the exceptions:
   high-IV entries lost more and won less often there. AMD's +$18,280
   gap is an outlier row, not the story — the median gap is).
+- v16: ✅ regime-aware forward entry filter (shipped 2026-11-14: `python
+  backtest.py --regime-filter` tests the tradable version of the v6/v15
+  high-IV finding — enter only when today's entry IV is above its trailing
+  252-day median, computed only from data available at entry time, with the
+  plain run sharing the filtered run's warmup start so the P&L delta
+  isolates the filter; skipped counts and trade share printed alongside.
+  One rule, chosen once, never grid-searched — a forward test of a
+  hypothesis, not a live entry filter; re-test on a different period before
+  trusting any delta).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime
