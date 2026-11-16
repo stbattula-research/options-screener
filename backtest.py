@@ -20,6 +20,9 @@ Usage:
     --regime-filter runs the v16 forward entry filter: enter only when
     today's entry IV is above its trailing 252-day median, plain vs
     filtered side by side over the same warmup start.
+    --offset-years N (with --regime-filter only) re-runs that same
+    filter on an earlier window: the N-year window ending N calendar
+    years ago (v17 re-test of the v16 hypothesis on a different period).
 """
 
 import argparse
@@ -64,14 +67,25 @@ from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        sweep_exit_rules,
                                        sweep_skew_spreads,
                                        sweep_width_spreads)
-from options_screener.data import DataError, get_closes, get_closes_with_dates
+from options_screener.data import (DataError, get_closes,
+                                   get_closes_with_dates,
+                                   get_closes_window)
 
 
 def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
                     spreads=False, spread_widths=False,
-                    earnings_calendar=None, regime_filter=False):
+                    earnings_calendar=None, regime_filter=False,
+                    offset_years=0):
     if regime_filter:
-        closes = get_closes(ticker, period=f"{years}y")
+        window = None
+        if offset_years:
+            closes, w_start, w_end = get_closes_window(
+                ticker, years, offset_years)
+            window = {"start": w_start.isoformat(),
+                      "end": w_end.isoformat(),
+                      "years": years, "offset_years": offset_years}
+        else:
+            closes = get_closes(ticker, period=f"{years}y")
         rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
         lookback = rf.get("lookback_days",
                           DEFAULT_REGIME_FILTER["lookback_days"])
@@ -82,7 +96,8 @@ def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
         filt = simulate_regime_filtered(closes, cfg)
         return {"plain": {"trades": plain_trades,
                           "summary": summarize(plain_trades)},
-                "filtered": filt}
+                "filtered": filt,
+                "window": window}
     if earnings_calendar is not None:
         closes, dates = get_closes_with_dates(ticker, period=f"{years}y")
         if spreads:
@@ -183,6 +198,12 @@ def main() -> int:
                          "data available at entry time. Reports plain vs "
                          "filtered P&L side by side over the same warmup "
                          "start, with skipped counts and trade share.")
+    ap.add_argument("--offset-years", type=int, default=0,
+                    help="with --regime-filter only: re-test the filter on "
+                         "an earlier window — the --years-long window "
+                         "ending this many calendar years ago (v17: the "
+                         "re-test v16 asked for, same rule and lookback, "
+                         "different period). Must be >= 0.")
     ap.add_argument("--earnings-calendar", default=None, metavar="FILE",
                     help="JSON file {ticker: [\"YYYY-MM-DD\", ...]} of known "
                          "earnings dates: re-run the simulation with the "
@@ -194,6 +215,11 @@ def main() -> int:
                          "Combine with --spreads for the earnings-aware "
                          "spread backtest (plain vs gated per skew).")
     args = ap.parse_args()
+
+    if args.offset_years and not args.regime_filter:
+        ap.error("--offset-years only applies with --regime-filter")
+    if args.offset_years < 0:
+        ap.error("--offset-years must be >= 0")
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
@@ -218,7 +244,8 @@ def main() -> int:
                                   spreads=args.spreads,
                                   spread_widths=args.spread_widths,
                                   earnings_calendar=earnings_calendar,
-                                  regime_filter=args.regime_filter)
+                                  regime_filter=args.regime_filter,
+                                  offset_years=args.offset_years)
             results[ticker] = res
             if args.regime_filter:
                 p, f = res["plain"]["summary"], res["filtered"]["summary"]
@@ -300,7 +327,13 @@ def main() -> int:
         rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
         lookback = rf.get("lookback_days",
                           DEFAULT_REGIME_FILTER["lookback_days"])
-        payload = build_regime_filter_payload(results, cfg, lookback)
+        # every ticker shares the same window (same trading calendar),
+        # so take the first recorded one; a run with no window ran on
+        # the recent period, which the payload renders as before
+        window = next((r.get("window") for r in results.values()
+                       if r.get("window")), None)
+        payload = build_regime_filter_payload(results, cfg, lookback,
+                                              window=window)
         md_path, json_path = write_reports(payload, args.out_dir,
                                            "backtest-regime-filter",
                                            render_regime_filter_markdown)

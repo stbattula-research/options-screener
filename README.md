@@ -395,6 +395,39 @@ survived one forward test, not a live entry filter, and the live screener
 takes no filter from this mode until the rule is re-tested on a different
 period.
 
+## Regime-filter re-test on an earlier window (v17)
+
+v16 ended with an explicit instruction: re-test the filter on a different
+period before trusting its delta. v17 is that re-test, with nothing else
+changed — same rule (enter only above the trailing 252-day IV median),
+same lookback, same warmup. `python backtest.py --regime-filter --all
+--years 2 --offset-years 2` runs it on the 2-year window ending 2 years
+ago. The window is defined by calendar dates, not by a fixed trading-day
+count: a real 2-year span holds however many trading days the market
+produced (503 here, not 2 × 252 — the first implementation assumed 504
+and the live run failed on exactly that one missing close, which is why
+the window is now a calendar span with a floor instead of a count).
+
+The re-test disagrees with v16. On the earlier window (2022-11-18 to
+2024-11-15, all 15 tickers readable) the filtered run made more than the
+plain run on only 5 of 15 tickers, with a median P&L delta of −$261.44
+per contract and a median win-rate gap of −3.7% — against v16's +$355.29
+and 10 of 15 on the recent window. The loser-avoidance pattern still
+showed up in places (TSLA flipped −$3,712 plain to −$300 filtered, a
++$3,412 delta; MSFT and AMD flipped the same way), but META went the
+other direction by more (−$5,471: the filter skipped a +$5,287 plain run
+down to −$184). The one consistently favorable number is the drawdown:
+the filtered run drew down less on median (−$180.03 gap), as it did in
+v16 — it trades half as often, so it sits out more of everything, good
+and bad.
+
+The conclusion is the one the report prints: the v16 delta was
+period-specific, not a rule. The live screener takes no entry filter
+from this mode, and the next question is no longer "does the filter
+work" but whether any sub-pattern (the TSLA/MSFT/AMD loser-avoidance,
+the drawdown reduction) survives a third window — or whether the whole
+idea is a coin flip that happened to land heads once.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -483,6 +516,16 @@ period.
   One rule, chosen once, never grid-searched — a forward test of a
   hypothesis, not a live entry filter; re-test on a different period before
   trusting any delta).
+- v17: ✅ regime-filter re-test on an earlier window (shipped 2026-11-16:
+  `python backtest.py --regime-filter --all --years 2 --offset-years 2`
+  re-runs the v16 rule unchanged on the 2-year window ending 2 years ago
+  (2022-11-18 to 2024-11-15); the window is a calendar span, not a fixed
+  252/year count — a real 2-year span holds 503 trading days here. The
+  re-test DISAGREES with v16: median P&L delta −$261.44 (vs +$355.29) and
+  the filter won on only 5 of 15 tickers (vs 10 of 15), median win-rate
+  gap −3.7%; TSLA/MSFT/AMD still showed loser-avoidance, META went the
+  other way by −$5,471. The v16 delta was period-specific — no entry
+  filter goes into the live screener from this mode).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime

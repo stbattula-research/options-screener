@@ -77,6 +77,9 @@ backtest:
 # warmup and never trade. The plain run shares the warmup start, so the
 # P&L delta isolates the filter. One rule, chosen once — the lookback
 # is NOT grid-searched. Run: python backtest.py --regime-filter --all
+# v17 re-test on an earlier window: --regime-filter --all --years 2
+# --offset-years 2 (same rule, window ending 2 years ago; the window is
+# a calendar span — a real 2-year span holds ~503 trading days, not 504).
 regime_filter:
   lookback_days: 252  # ~1 trading year of trailing entry-IV history
   mode: "above"       # v16 tests only "above"; "below" is untested

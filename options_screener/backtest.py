@@ -1819,10 +1819,28 @@ def compare_regime_filter(results):
     return {"rows": rows, "summary": summary}
 
 
-def build_regime_filter_payload(results, cfg, lookback_days):
-    """results: {ticker: {"plain": {...}, "filtered": {...}}} -> payload."""
+def build_regime_filter_payload(results, cfg, lookback_days, window=None):
+    """results: {ticker: {"plain": {...}, "filtered": {...}}} -> payload.
+
+    `window` is the optional {"start", "end", "years", "offset_years"}
+    dict of a v17 re-test window; when present the payload records it
+    and the re-test assumption replaces the "re-test before trusting"
+    line, since this run IS that re-test.
+    """
     compared = compare_regime_filter(results)
-    return {
+    retest_note = (
+        "Re-test on a different period before trusting any delta here."
+    )
+    if window is not None:
+        retest_note = (
+            f"This run IS that re-test: the same rule, same lookback "
+            f"({lookback_days}d), on the {window['years']}-year window "
+            f"{window['start']} to {window['end']}, ending "
+            f"{window['offset_years']} year(s) ago. Compare its median "
+            "P&L delta against the v16 run on the recent window before "
+            "trusting either — one period agreeing is still not a rule."
+        )
+    payload = {
         "mode": "Regime-aware forward entry filter",
         "lookback_days": lookback_days,
         "strategy": "cash-secured puts: ~30 delta, "
@@ -1844,8 +1862,7 @@ def build_regime_filter_payload(results, cfg, lookback_days):
             "(a median splits attempts in half).",
             "One rule, chosen once, tested once: the lookback was not "
             "grid-searched, so this is a forward test of a hypothesis, "
-            "not an optimizer result. Re-test on a different period "
-            "before trusting any delta here.",
+            "not an optimizer result. " + retest_note,
             "A row is readable when the plain side has at least "
             f"{MIN_PLAIN_TRADES} trades and the filtered side at least "
             f"{MIN_FILTER_TRADES}; thin rows are printed but never "
@@ -1854,6 +1871,9 @@ def build_regime_filter_payload(results, cfg, lookback_days):
         "rows": compared["rows"],
         "summary": compared["summary"],
     }
+    if window is not None:
+        payload["window"] = window
+    return payload
 
 
 def render_regime_filter_markdown(payload):
@@ -1879,6 +1899,14 @@ def render_regime_filter_markdown(payload):
              "proxy. **Plain run:** same warmup start, no filter — the "
              "P&L delta isolates the filter, not the later start.",
              ""]
+    if payload.get("window"):
+        w = payload["window"]
+        lines.append(f"**Window:** {w['start']} to {w['end']} — a "
+                     f"{w['years']}-year window ending "
+                     f"{w['offset_years']} year(s) ago. Same rule, same "
+                     "lookback as the v16 run on the recent window: "
+                     "this is the re-test, not a new rule.")
+        lines.append("")
     s = payload["summary"]
     lines.append("## Cross-ticker summary")
     lines.append("")
@@ -1945,6 +1973,13 @@ def render_regime_filter_markdown(payload):
                  "touching the live screener — and the live screener "
                  "takes no entry filter from this mode until that "
                  "re-test happens.")
+    if payload.get("window"):
+        lines.append("- This run is that re-test. Compare its median "
+                     "delta with the v16 recent-window run before "
+                     "concluding anything: agreement across two windows "
+                     "is evidence the filter is not a one-period "
+                     "artifact; disagreement means the v16 delta was "
+                     "period-specific.")
     lines.append("")
     lines.append("## Assumptions & limitations")
     lines.append("")

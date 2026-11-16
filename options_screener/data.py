@@ -5,7 +5,7 @@ and the endpoint can break without notice. Every fetch failure is surfaced
 to the caller instead of silently returning stale data.
 """
 
-from datetime import date
+from datetime import date, timedelta
 
 import yfinance as yf
 
@@ -47,6 +47,53 @@ def get_closes_with_dates(ticker: str, period: str = "1y"):
     if len(closes) < 2 or len(dates) != len(closes):
         raise DataError(f"{ticker}: price history too short")
     return closes, dates
+
+
+def slice_window(closes, dates, years, offset_years, today):
+    """Carve an earlier `years`-long window out of a longer closes series.
+
+    `closes`/`dates` are the full series (oldest first), fetched over
+    `years + offset_years` years. The window is the CALENDAR span
+    (cutoff - years*365 days, cutoff], where cutoff is `offset_years`
+    calendar years before `today` — so a 2-year window holds however
+    many trading days the market actually produced in those two years
+    (typically 500-506, not exactly 2 * 252: a fixed 252/year count
+    over-counts short years and once left a real window one close
+    short). The re-test window is the same calendar span as the
+    original run, only earlier, so the two runs stay directly
+    comparable. Returns (window_closes, start_date, end_date).
+    Raises ValueError for years < 1 or offset_years < 0; raises
+    DataError when the window holds fewer than years * 240 closes
+    (a data gap, never a silently shorter window).
+    """
+    if years < 1:
+        raise ValueError("years must be >= 1")
+    if offset_years < 0:
+        raise ValueError("offset_years must be >= 0")
+    if len(closes) != len(dates):
+        raise DataError("closes/dates length mismatch")
+    cutoff = today - timedelta(days=365 * offset_years)
+    start = cutoff - timedelta(days=365 * years)
+    window = [c for c, d in zip(closes, dates) if start < d <= cutoff]
+    window_dates = [d for d in dates if start < d <= cutoff]
+    floor = years * 240  # real years hold ~250-253 trading days
+    if len(window) < floor:
+        raise DataError(
+            f"only {len(window)} closes in the {years}-year window "
+            f"ending {cutoff.isoformat()}, need at least {floor}")
+    return window, window_dates[0], window_dates[-1]
+
+
+def get_closes_window(ticker: str, years: int, offset_years: int):
+    """Closes for a `years`-long window ending `offset_years` years ago.
+
+    Fetches `years + offset_years` years of history and carves the
+    window out with `slice_window`. Returns (closes, start_date,
+    end_date). Raises DataError like get_closes.
+    """
+    closes, dates = get_closes_with_dates(
+        ticker, period=f"{years + offset_years}y")
+    return slice_window(closes, dates, years, offset_years, date.today())
 
 
 def get_expirations(ticker: str) -> list:
