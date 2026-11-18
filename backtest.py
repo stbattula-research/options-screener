@@ -23,6 +23,11 @@ Usage:
     --offset-years N (with --regime-filter only) re-runs that same
     filter on an earlier window: the N-year window ending N calendar
     years ago (v17 re-test of the v16 hypothesis on a different period).
+    --regime-windows 0,2,4 (with --regime-filter only) runs the filter
+    on several non-overlapping windows at once and aggregates per
+    ticker (v18: the third window v16/v17 left open, counted rather
+    than eyeballed). One fetch per ticker; windows are sliced from the
+    same series.
 """
 
 import argparse
@@ -40,6 +45,7 @@ from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        build_backtest_payload,
                                        build_earnings_payload,
                                        build_regime_compare_payload,
+                                       build_regime_filter_multiwindow_payload,
                                        build_regime_filter_payload,
                                        build_regime_payload,
                                        build_spread_earnings_payload,
@@ -49,10 +55,12 @@ from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        compare_regime_filter,
                                        compare_regime_splits,
                                        default_sweep_key, rank_sweep,
+                                       parse_regime_windows,
                                        render_backtest_markdown,
                                        render_earnings_markdown,
                                        render_regime_compare_markdown,
                                        render_regime_filter_markdown,
+                                       render_regime_filter_multiwindow_markdown,
                                        render_regime_markdown,
                                        render_spread_earnings_markdown,
                                        render_spread_markdown,
@@ -69,7 +77,56 @@ from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        sweep_width_spreads)
 from options_screener.data import (DataError, get_closes,
                                    get_closes_with_dates,
-                                   get_closes_window)
+                                   get_closes_window, slice_window)
+
+
+def _regime_filter_on_closes(closes, cfg):
+    """Plain vs regime-filtered run over one closes series.
+
+    The plain run shares the filtered run's warmup start, so the P&L
+    delta isolates the filter itself, not the later start. Shared by
+    the single-window branch and the multi-window mode.
+    """
+    rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
+    lookback = rf.get("lookback_days",
+                      DEFAULT_REGIME_FILTER["lookback_days"])
+    # plain run shares the filtered run's warmup start, so the P&L
+    # delta isolates the filter itself, not the later start
+    warmup = cfg["backtest"]["iv_window"] + lookback
+    plain_trades = simulate(closes, cfg, start_day=warmup)
+    filt = simulate_regime_filtered(closes, cfg)
+    return {"plain": {"trades": plain_trades,
+                      "summary": summarize(plain_trades)},
+            "filtered": filt}
+
+
+def backtest_ticker_multiwindow(ticker, cfg, years, offsets):
+    """Run the regime filter in several non-overlapping windows at once.
+
+    Fetches the ticker once over years + max(offsets) years and slices
+    each window out of the same series (slice_window), so the windows
+    share identical underlying data and the fetch count stays one per
+    ticker instead of one per window. Returns ({offset: result},
+    [errors]): a window that fails its floor check is skipped for that
+    ticker (the error is recorded) instead of killing the other
+    windows; a failed fetch raises DataError and kills the ticker.
+    """
+    closes, dates = get_closes_with_dates(
+        ticker, period=f"{years + max(offsets)}y")
+    out, errors = {}, []
+    for off in offsets:
+        try:
+            window_closes, w_start, w_end = slice_window(
+                closes, dates, years, off, date.today())
+        except DataError as exc:
+            errors.append(str(exc))
+            continue
+        res = _regime_filter_on_closes(window_closes, cfg)
+        res["window"] = {"start": w_start.isoformat(),
+                         "end": w_end.isoformat(),
+                         "years": years, "offset_years": off}
+        out[off] = res
+    return out, errors
 
 
 def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
@@ -86,18 +143,9 @@ def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
                       "years": years, "offset_years": offset_years}
         else:
             closes = get_closes(ticker, period=f"{years}y")
-        rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
-        lookback = rf.get("lookback_days",
-                          DEFAULT_REGIME_FILTER["lookback_days"])
-        # plain run shares the filtered run's warmup start, so the P&L
-        # delta isolates the filter itself, not the later start
-        warmup = cfg["backtest"]["iv_window"] + lookback
-        plain_trades = simulate(closes, cfg, start_day=warmup)
-        filt = simulate_regime_filtered(closes, cfg)
-        return {"plain": {"trades": plain_trades,
-                          "summary": summarize(plain_trades)},
-                "filtered": filt,
-                "window": window}
+        res = _regime_filter_on_closes(closes, cfg)
+        res["window"] = window
+        return res
     if earnings_calendar is not None:
         closes, dates = get_closes_with_dates(ticker, period=f"{years}y")
         if spreads:
@@ -204,6 +252,14 @@ def main() -> int:
                          "ending this many calendar years ago (v17: the "
                          "re-test v16 asked for, same rule and lookback, "
                          "different period). Must be >= 0.")
+    ap.add_argument("--regime-windows", default=None, metavar="0,2,4",
+                    help="with --regime-filter only: run the filter on "
+                         "several non-overlapping windows at once — "
+                         "comma-separated offsets in years, at least two, "
+                         "e.g. 0,2,4 (v18: the same rule on the recent "
+                         "window plus the windows ending 2 and 4 years "
+                         "ago, aggregated per ticker). Cannot be combined "
+                         "with --offset-years.")
     ap.add_argument("--earnings-calendar", default=None, metavar="FILE",
                     help="JSON file {ticker: [\"YYYY-MM-DD\", ...]} of known "
                          "earnings dates: re-run the simulation with the "
@@ -220,6 +276,18 @@ def main() -> int:
         ap.error("--offset-years only applies with --regime-filter")
     if args.offset_years < 0:
         ap.error("--offset-years must be >= 0")
+    if args.regime_windows is not None and not args.regime_filter:
+        ap.error("--regime-windows only applies with --regime-filter")
+    if args.regime_windows is not None and args.offset_years:
+        ap.error("--regime-windows and --offset-years cannot be combined; "
+                 "use --regime-windows for several windows at once")
+    offsets = None
+    if args.regime_windows is not None:
+        try:
+            offsets = parse_regime_windows(args.regime_windows)
+        except ValueError as exc:
+            ap.error(str(exc))
+    multiwindow = args.regime_filter and offsets is not None
 
     with open(args.config) as f:
         cfg = yaml.safe_load(f)
@@ -239,6 +307,28 @@ def main() -> int:
     results, errors = {}, []
     for ticker in tickers:
         try:
+            if multiwindow:
+                res, werrs = backtest_ticker_multiwindow(
+                    ticker, cfg, args.years, offsets)
+                errors.extend(werrs)
+                results[ticker] = res
+                for off in offsets:
+                    r = res.get(off)
+                    if r is None:
+                        print(f"[{ticker}] window -{off}y: no data",
+                              file=sys.stderr)
+                        continue
+                    p = r["plain"]["summary"]
+                    f = r["filtered"]["summary"]
+                    print(f"[{ticker}] window -{off}y "
+                          f"({r['window']['start']} to "
+                          f"{r['window']['end']}): plain {p['trades']} "
+                          f"trades ${p['total_pnl']:+,.2f}; filtered "
+                          f"{f['trades']} trades "
+                          f"${f['total_pnl']:+,.2f} "
+                          f"({len(r['filtered']['skipped'])} skipped, "
+                          f"lookback {r['filtered']['lookback_days']}d)")
+                continue
             res = backtest_ticker(ticker, cfg, args.years, sweep=args.sweep,
                                   regimes=args.regimes or args.regime_compare,
                                   spreads=args.spreads,
@@ -323,7 +413,26 @@ def main() -> int:
         except Exception:  # never let one ticker kill the run
             errors.append(f"{ticker}: unexpected error\n{traceback.format_exc(limit=3)}")
 
-    if args.regime_filter:
+    if multiwindow:
+        rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
+        lookback = rf.get("lookback_days",
+                          DEFAULT_REGIME_FILTER["lookback_days"])
+        windowed = {}
+        for off in offsets:
+            per = {t: results[t][off] for t in results
+                   if off in results[t]}
+            compared = compare_regime_filter(per)
+            window = next((results[t][off]["window"] for t in results
+                           if off in results[t]), None)
+            windowed[off] = {"rows": compared["rows"],
+                             "summary": compared["summary"],
+                             "window": window}
+        payload = build_regime_filter_multiwindow_payload(
+            windowed, cfg, lookback)
+        md_path, json_path = write_reports(
+            payload, args.out_dir, "backtest-regime-filter-multiwindow",
+            render_regime_filter_multiwindow_markdown)
+    elif args.regime_filter:
         rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
         lookback = rf.get("lookback_days",
                           DEFAULT_REGIME_FILTER["lookback_days"])

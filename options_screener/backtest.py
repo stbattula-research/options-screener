@@ -1991,3 +1991,343 @@ def render_regime_filter_markdown(payload):
                  "risking capital._")
     lines.append("")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# v18: multi-window regime-filter comparison — the same rule, same
+# lookback, on several non-overlapping windows at once.
+#
+# v16 tested the filter on the recent window and v17 re-tested it once,
+# two years earlier — and the two runs disagreed (median P&L delta
+# +$355.29 vs -$261.44). Two windows cannot settle whether the first
+# was a coin flip that landed heads: one more window is still one
+# anecdote, but three windows let a per-ticker pattern be counted —
+# how many windows the filter won, whether the drawdown reduction
+# shows up every time, whether any ticker's loser-avoidance repeats.
+# This mode runs the comparison across the given offsets in one
+# command and aggregates per ticker, so the question gets a table
+# instead of three separate reports to eyeball.
+#
+# Honest limits, carried in the payload and the report: each window
+# is sliced from the same fetched series, but the filter's warmup and
+# trailing medians are computed only from within-window closes — the
+# first entries of an earlier window never see the data just before
+# that window, so a window's first ~year is a cold start, not a
+# continuation. Windows are calendar spans, so a 2-year window holds
+# however many trading days the market produced (typically 500-506).
+# Three windows agreeing is still not a rule: it is three forward
+# tests of one hypothesis, and the live screener takes no entry
+# filter from this mode.
+# ---------------------------------------------------------------------------
+
+def parse_regime_windows(value):
+    """Parse a "--regime-windows 0,2,4" value into a sorted offset list.
+
+    Raises ValueError on an empty value, a non-integer, a negative
+    offset, a duplicate, or fewer than two offsets — one window is
+    what --offset-years already does.
+    """
+    if value is None or not str(value).strip():
+        raise ValueError(
+            "regime windows must list at least two offsets, e.g. '0,2,4'")
+    try:
+        offsets = [int(part) for part in str(value).split(",")]
+    except ValueError:
+        raise ValueError(
+            f"regime windows must be comma-separated years, got {value!r}")
+    if any(off < 0 for off in offsets):
+        raise ValueError("regime window offsets must be >= 0")
+    if len(set(offsets)) != len(offsets):
+        raise ValueError("regime window offsets must be unique")
+    if len(offsets) < 2:
+        raise ValueError(
+            "at least two windows are needed; one window is --offset-years")
+    return sorted(offsets)
+
+
+def compare_regime_filter_windows(windowed):
+    """Aggregate per-window regime-filter comparisons across windows.
+
+    `windowed`: {offset_years: {"rows": compare_regime_filter rows,
+    "summary": compare_regime_filter summary, "window": {...}}}.
+    Returns {"windows": [...], "rows": [...], "summary": {...}}.
+
+    A per-ticker row carries the P&L delta, win gap, drawdown gap and
+    trade share for each window (None when the ticker is absent from
+    that window), plus the median of each across its READABLE windows
+    only — thin rows are printed but never counted, the same rule the
+    single-window summary uses. `wins_pnl` counts readable windows
+    where the filtered run made more; `dd_always_lower` is True only
+    when the drawdown gap is negative in every readable window. The
+    verdict is "filter won every readable window", "filter lost every
+    readable window", "mixed", or "thin everywhere" (no readable
+    window). Rows rank by median P&L delta, highest first, None last.
+    """
+    offsets = sorted(windowed)
+    by_ticker = {}
+    for off in offsets:
+        for row in windowed[off]["rows"]:
+            by_ticker.setdefault(row["ticker"], {})[off] = row
+    rows = []
+    for ticker, per_off in by_ticker.items():
+        cells = {}
+        for off in offsets:
+            row = per_off.get(off)
+            if row is None:
+                cells[off] = None
+            else:
+                cells[off] = {
+                    "pnl_delta": row["pnl_delta"],
+                    "win_gap": row["win_gap"],
+                    "dd_gap": row["dd_gap"],
+                    "trade_share": row["trade_share"],
+                    "thin": row["thin"],
+                }
+        readable = [c for c in cells.values()
+                    if c is not None and not c["thin"]]
+        wins = sum(1 for c in readable
+                   if c["pnl_delta"] is not None and c["pnl_delta"] > 0)
+        median_pnl = _median([c["pnl_delta"] for c in readable
+                              if c["pnl_delta"] is not None])
+        median_win = _median([c["win_gap"] for c in readable
+                              if c["win_gap"] is not None])
+        median_dd = _median([c["dd_gap"] for c in readable
+                             if c["dd_gap"] is not None])
+        median_share = _median([c["trade_share"] for c in readable
+                                if c["trade_share"] is not None])
+        dd_gaps = [c["dd_gap"] for c in readable
+                   if c["dd_gap"] is not None]
+        dd_always_lower = bool(dd_gaps) and all(g < 0 for g in dd_gaps)
+        if not readable:
+            verdict = "thin everywhere"
+        elif wins == len(readable):
+            verdict = "filter won every readable window"
+        elif wins == 0:
+            verdict = "filter lost every readable window"
+        else:
+            verdict = "mixed"
+        rows.append({
+            "ticker": ticker,
+            "per_window": {off: cells[off] for off in offsets},
+            "windows_readable": len(readable),
+            "wins_pnl": wins,
+            "median_pnl_delta": median_pnl,
+            "median_win_gap": median_win,
+            "median_dd_gap": median_dd,
+            "median_trade_share": median_share,
+            "dd_always_lower": dd_always_lower,
+            "verdict": verdict,
+        })
+    rows.sort(key=lambda r: (r["median_pnl_delta"] is None,
+                             -(r["median_pnl_delta"] or 0)))
+    multi = [r for r in rows if r["windows_readable"] >= 2]
+    summary = {
+        "windows_compared": len(offsets),
+        "tickers_compared": len(rows),
+        "tickers_in_all_windows": sum(
+            1 for r in rows
+            if all(r["per_window"][off] is not None for off in offsets)),
+        "consistent_winners": sum(
+            1 for r in multi
+            if r["verdict"] == "filter won every readable window"),
+        "consistent_losers": sum(
+            1 for r in multi
+            if r["verdict"] == "filter lost every readable window"),
+        "mixed": sum(1 for r in multi if r["verdict"] == "mixed"),
+        "median_of_median_pnl_delta": _median(
+            [r["median_pnl_delta"] for r in rows
+             if r["median_pnl_delta"] is not None]),
+        "median_of_median_dd_gap": _median(
+            [r["median_dd_gap"] for r in rows
+             if r["median_dd_gap"] is not None]),
+        "dd_always_lower_count": sum(1 for r in rows if r["dd_always_lower"]),
+    }
+    windows = [{"offset_years": off,
+                "window": windowed[off].get("window"),
+                "summary": windowed[off]["summary"]}
+               for off in offsets]
+    return {"windows": windows, "rows": rows, "summary": summary}
+
+
+def build_regime_filter_multiwindow_payload(windowed, cfg, lookback_days):
+    """windowed: {offset: {"rows", "summary", "window"}} -> payload."""
+    compared = compare_regime_filter_windows(windowed)
+    offsets = [w["offset_years"] for w in compared["windows"]]
+    payload = {
+        "mode": "Regime-aware forward entry filter, multi-window",
+        "lookback_days": lookback_days,
+        "offsets_years": offsets,
+        "strategy": "cash-secured puts: ~30 delta, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "The filter enters only when the entry IV is strictly above "
+            f"the median of the same IV proxy over the trailing "
+            f"{lookback_days} trading days, computed only from data "
+            "available at entry time (the threshold window ends the day "
+            "before the entry). The first iv_window + lookback_days days "
+            "of each window are warmup and never trade.",
+            "The plain run shares the filtered run's warmup start in "
+            "every window, so each window's P&L delta isolates the "
+            "filter itself, not the later start.",
+            "Entry IV is the trailing-realized-vol proxy (x 1.15), not "
+            "traded implied vol; a high-IV entry also means larger "
+            "premiums AND larger moves. In a stationary market the "
+            "filter passes about half of all attempts by construction "
+            "(a median splits attempts in half).",
+            "Each window is a non-overlapping calendar span of the same "
+            "length, sliced from one fetched series per ticker; the "
+            "same rule and lookback run in every window, so the only "
+            "thing that changes between windows is the period.",
+            "Each window's warmup and trailing medians are computed "
+            "only from closes inside that window — the first entries "
+            "of an earlier window never see the data just before it, "
+            "so a window's first ~year is a cold start, not a "
+            "continuation of the previous window.",
+            "A per-ticker median counts only its READABLE windows "
+            f"(plain >= {MIN_PLAIN_TRADES} trades, filtered >= "
+            f"{MIN_FILTER_TRADES}); thin windows are printed but never "
+            "counted. A verdict needs at least two readable windows — "
+            "one window agreeing is an anecdote, not a pattern.",
+            "One rule, chosen once, tested once per window: the "
+            "lookback was not grid-searched, so this is a forward test "
+            "of a hypothesis, not an optimizer result. Three windows "
+            "agreeing is still not a rule — the live screener takes no "
+            "entry filter from this mode.",
+        ],
+        "windows": compared["windows"],
+        "rows": compared["rows"],
+        "summary": compared["summary"],
+    }
+    return payload
+
+
+def render_regime_filter_multiwindow_markdown(payload):
+    """Human-readable multi-window regime-filter report."""
+    n = len(payload["windows"])
+    offsets = [w["offset_years"] for w in payload["windows"]]
+    lines = ["# Options Screener — Regime Filter Across "
+             f"{n} Windows (research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy (trailing realized vol x "
+             "1.15) — this is NOT historical option-chain data. v16 "
+             "tested the filter on the recent window and v17 re-tested "
+             "it once, two years earlier, and the two runs disagreed "
+             "(median P&L delta +$355.29 vs -$261.44). Two windows "
+             "cannot settle whether the first was a coin flip that "
+             "landed heads. This mode runs the same rule, same "
+             f"lookback ({payload['lookback_days']}d), on {n} "
+             "non-overlapping windows at once and counts, per ticker, "
+             "how many windows the filter won — so the question gets a "
+             "table instead of three separate reports to eyeball.",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             f"**Filter:** enter only when entry IV > trailing "
+             f"{payload['lookback_days']}-day median of the entry-IV "
+             "proxy. **Plain run:** same warmup start, no filter — the "
+             "P&L delta isolates the filter, not the later start.",
+             ""]
+    lines.append("## Per-window summaries")
+    lines.append("")
+    lines.append("| Window | Dates | Readable | Filter won (P&L) | "
+                 "Median P&L Δ | Median win Δ | Median max-DD Δ | "
+                 "Median trade share |")
+    lines.append("|--------|-------|----------|------------------|----------------"
+                 "|----------------|-----------------|--------------------|")
+    for w in payload["windows"]:
+        s = w["summary"]
+        win = w["window"]
+        dates = (f"{win['start']} to {win['end']}"
+                 if win is not None else "recent period")
+        label = ("recent" if w["offset_years"] == 0
+                 else f"{w['offset_years']}y ago")
+        lines.append(
+            f"| {label} | {dates} | {s['readable_tickers']} of "
+            f"{s['tickers_compared']} | {s['filtered_wins_pnl']} of "
+            f"{s['readable_tickers']} | "
+            f"{_compare_cell(s['median_pnl_delta'], '${:+,.2f}')} | "
+            f"{_compare_cell(s['median_win_gap'], '{:+.1%}')} | "
+            f"{_compare_cell(s['median_dd_gap'], '${:+,.2f}')} | "
+            f"{_compare_cell(s['median_trade_share'], '{:.0%}')} |")
+    lines.append("")
+    lines.append("## Per-ticker results (ranked by median P&L delta)")
+    lines.append("")
+    header = "| Ticker |" + "".join(
+        f" Δ {'recent' if off == 0 else f'-{off}y'} |" for off in offsets)
+    header += " Median Δ | Won | DD always lower | Verdict |"
+    lines.append(header)
+    lines.append("|--------|" + "----------|" * len(offsets)
+                 + "----------|-----|---------------|---------|")
+    for r in payload["rows"]:
+        cells = []
+        for off in offsets:
+            cell = r["per_window"][off]
+            if cell is None:
+                cells.append("—")
+            elif cell["pnl_delta"] is None:
+                cells.append("—")
+            else:
+                text = f"${cell['pnl_delta']:+,.2f}"
+                if cell["thin"]:
+                    text += " †"
+                cells.append(text)
+        lines.append(
+            f"| {r['ticker']} | " + " | ".join(cells) + " | "
+            f"{_compare_cell(r['median_pnl_delta'], '${:+,.2f}')} | "
+            f"{r['wins_pnl']} of {r['windows_readable']} | "
+            f"{'yes' if r['dd_always_lower'] else 'no'} | "
+            f"{r['verdict']} |")
+    lines.append("")
+    lines.append("† = thin window (plain < "
+                 f"{MIN_PLAIN_TRADES} trades or filtered < "
+                 f"{MIN_FILTER_TRADES}): printed, never counted in the "
+                 "median or the wins. — = ticker absent from that window.")
+    lines.append("")
+    s = payload["summary"]
+    lines.append("## Cross-window summary")
+    lines.append("")
+    lines.append(f"- {s['windows_compared']} windows compared, "
+                 f"{s['tickers_compared']} tickers, "
+                 f"{s['tickers_in_all_windows']} present in every window.")
+    lines.append(f"- Consistent winners (filter won every readable "
+                 f"window, at least two): {s['consistent_winners']}; "
+                 f"consistent losers: {s['consistent_losers']}; mixed: "
+                 f"{s['mixed']}.")
+    lines.append(f"- Median of the per-ticker median P&L deltas: "
+                 f"{_compare_cell(s['median_of_median_pnl_delta'], '${:+,.2f}')} "
+                 "per contract; median of the per-ticker median "
+                 "max-drawdown gaps: "
+                 f"{_compare_cell(s['median_of_median_dd_gap'], '${:+,.2f}')}.")
+    lines.append(f"- The filtered run drew down less in every readable "
+                 f"window on {s['dd_always_lower_count']} tickers — the "
+                 "one sub-pattern v16 and v17 agreed on, counted here "
+                 "rather than asserted.")
+    lines.append("")
+    lines.append("## How to read this")
+    lines.append("")
+    lines.append("- Count windows won per ticker, not one window's delta: "
+                 "a ticker the filter won in 3 of 3 windows is a pattern "
+                 "worth naming; a ticker it won in 1 of 3 is noise with a "
+                 "good day in it.")
+    lines.append("- The drawdown column is the cheap win to check first: "
+                 "the filter trades about half as often, so it should "
+                 "draw down less almost everywhere — if it does not, "
+                 "something about that ticker's entries is different, "
+                 "and the P&L delta deserves a second look before the "
+                 "drawdown gap does.")
+    lines.append("- Three windows agreeing is still not a rule. This is "
+                 "three forward tests of one hypothesis, on three "
+                 "periods, with the same lookback chosen once and never "
+                 "grid-searched. The live screener takes no entry filter "
+                 "from this mode.")
+    lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)

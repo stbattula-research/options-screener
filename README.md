@@ -428,6 +428,46 @@ work" but whether any sub-pattern (the TSLA/MSFT/AMD loser-avoidance,
 the drawdown reduction) survives a third window — or whether the whole
 idea is a coin flip that happened to land heads once.
 
+## Regime filter across three windows (v18)
+
+v18 is the third window, run properly: `python backtest.py
+--regime-filter --regime-windows 0,2,4 --all --years 2` runs the same
+rule, same lookback, on the recent window and the windows ending 2 and
+4 years ago, and aggregates per ticker instead of leaving three
+separate reports to eyeball. Each ticker is fetched once over the full
+span and the windows are sliced from that one series, so the windows
+share identical underlying data and the fetch count stays one per
+ticker. Per ticker the report prints the P&L delta in each window, the
+median delta across its readable windows, how many windows the filter
+won, and whether it drew down less in every readable window — the one
+sub-pattern v16 and v17 agreed on, now counted rather than asserted.
+
+The honest limits travel with it: each window's warmup and trailing
+medians are computed only from closes inside that window, so a
+window's first ~year is a cold start, and three windows agreeing is
+still not a rule. The live screener takes no entry filter from this
+mode either.
+
+The third window answers the question — mostly no. On the 2026-11-18
+smoke run (all 15 tickers, 2y windows) the filter won in 10 of 15
+tickers on the recent window, 6 of 15 two years ago, and 11 of 15 four
+years ago — but per ticker only 3 names won in every readable window
+(NFLX, MSFT, IWM) and 2 lost in every one (AAPL, XOM); the other 10
+are mixed. The median of the per-ticker median deltas is +$100.79 per
+contract — slightly positive, but a coin flip with a good day in it
+for most tickers, not a rule. The drawdown sub-pattern holds up
+better: the filtered run drew down less in every readable window on 5
+tickers, and the median max-drawdown gap is negative in all three
+windows. One more honest wrinkle: the recent and 2y-ago medians here
+(+$773.24 and −$134.94) differ from the v16/v17 reports (+$355.29 and
+−$261.44) because the windows are calendar spans anchored to today,
+so they moved a few days and the entry cadence shifted with them — the
+disagreement pattern is the same, but the magnitudes moved, which is
+itself evidence the deltas are period-sensitive. In the volatile
+2020–22 window the filter barely filtered at all (median trade share
+84% vs 50% two years ago), so its +$211.56 median there is mostly the
+plain run wearing a filter's name.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -526,6 +566,19 @@ idea is a coin flip that happened to land heads once.
   gap −3.7%; TSLA/MSFT/AMD still showed loser-avoidance, META went the
   other way by −$5,471. The v16 delta was period-specific — no entry
   filter goes into the live screener from this mode).
+- v18: ✅ regime filter across three windows (shipped 2026-11-18:
+  `python backtest.py --regime-filter --regime-windows 0,2,4 --all
+  --years 2` runs the same rule, same lookback, on the recent window
+  plus the windows ending 2 and 4 years ago, and aggregates per ticker
+  (median P&L delta across readable windows, windows won, drawdown
+  lower in every readable window) — the third window v16/v17 left
+  open, counted rather than eyeballed. One fetch per ticker; windows
+  sliced from the same series. Live smoke: only 3 of 15 tickers won in
+  every window (NFLX, MSFT, IWM), 2 lost in every one (AAPL, XOM),
+  10 mixed; median of median deltas +$100.79 — mostly a coin flip,
+  not a rule. The drawdown sub-pattern held up better (median DD gap
+  negative in all three windows). Three windows agreeing is still not
+  a rule — the live screener takes no entry filter from this mode).
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime

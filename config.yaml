@@ -83,6 +83,10 @@ backtest:
 regime_filter:
   lookback_days: 252  # ~1 trading year of trailing entry-IV history
   mode: "above"       # v16 tests only "above"; "below" is untested
+  # v18 multi-window: `python backtest.py --regime-filter
+  # --regime-windows 0,2,4 --all --years 2` runs the same rule in the
+  # recent window plus the windows ending 2 and 4 years ago, and
+  # aggregates per ticker — the third window v16/v17 left open.
 
 # v5 exit-rule sensitivity sweep: re-runs the simulation over a grid of
 # exit rules to check whether the exits: defaults above are robust or
