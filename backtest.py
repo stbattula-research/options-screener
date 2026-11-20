@@ -15,6 +15,11 @@ Usage:
                        [--spread-widths] [--earnings-calendar calendar.json]
     Combine --spreads with --earnings-calendar for the v11
     earnings-aware spread backtest (plain vs gated per skew).
+    Combine --spreads with --dividend-calendar for the v19
+    dividend-aware spread backtest: same shape, but it tests the
+    opt-in dividend exclusion (dividends.exclude: true) — with the
+    shipped flag-only default the gate is inactive and the filtered
+    run equals the plain run.
     --regime-compare runs the v6 split per ticker and compares the
     high-minus-low gaps across tickers (v15).
     --regime-filter runs the v16 forward entry filter: enter only when
@@ -48,6 +53,7 @@ from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        build_regime_filter_multiwindow_payload,
                                        build_regime_filter_payload,
                                        build_regime_payload,
+                                       build_spread_dividend_payload,
                                        build_spread_earnings_payload,
                                        build_spread_payload,
                                        build_sweep_payload,
@@ -62,6 +68,7 @@ from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        render_regime_filter_markdown,
                                        render_regime_filter_multiwindow_markdown,
                                        render_regime_markdown,
+                                       render_spread_dividend_markdown,
                                        render_spread_earnings_markdown,
                                        render_spread_markdown,
                                        render_sweep_markdown,
@@ -69,6 +76,7 @@ from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        simulate, simulate_earnings_aware,
                                        simulate_regime_filtered,
                                        simulate_spreads,
+                                       simulate_spreads_dividend_aware,
                                        simulate_spreads_earnings_aware,
                                        split_by_iv_regime,
                                        summarize, summarize_spreads,
@@ -131,8 +139,8 @@ def backtest_ticker_multiwindow(ticker, cfg, years, offsets):
 
 def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
                     spreads=False, spread_widths=False,
-                    earnings_calendar=None, regime_filter=False,
-                    offset_years=0):
+                    earnings_calendar=None, dividend_calendar=None,
+                    regime_filter=False, offset_years=0):
     if regime_filter:
         window = None
         if offset_years:
@@ -146,6 +154,22 @@ def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
         res = _regime_filter_on_closes(closes, cfg)
         res["window"] = window
         return res
+    if dividend_calendar is not None:
+        closes, dates = get_closes_with_dates(ticker, period=f"{years}y")
+        sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
+        per_skew = {}
+        for skew in sb["skews"]:
+            plain_trades = simulate_spreads(closes, cfg, skew,
+                                            sb["width_pct"])
+            filt = simulate_spreads_dividend_aware(
+                closes, cfg, skew, sb["width_pct"], dates,
+                dividend_calendar.get(ticker, []))
+            per_skew[skew] = {
+                "plain": {"trades": plain_trades,
+                          "summary": summarize_spreads(plain_trades)},
+                "filtered": filt}
+        return {"skews": per_skew,
+                "calendar_dates": len(dividend_calendar.get(ticker, []))}
     if earnings_calendar is not None:
         closes, dates = get_closes_with_dates(ticker, period=f"{years}y")
         if spreads:
@@ -270,7 +294,24 @@ def main() -> int:
                          "runs unfiltered and is flagged as such). "
                          "Combine with --spreads for the earnings-aware "
                          "spread backtest (plain vs gated per skew).")
+    ap.add_argument("--dividend-calendar", default=None, metavar="FILE",
+                    help="JSON file {ticker: [\"YYYY-MM-DD\", ...]} of known "
+                         "ex-dividend dates: with --spreads, re-run the "
+                         "spread simulation with the opt-in dividend "
+                         "exclusion applied and report plain vs filtered "
+                         "side by side per skew (v19; no free source "
+                         "publishes historical ex-dividend calendars, so "
+                         "the dates are caller-supplied; a ticker absent "
+                         "from the file runs unfiltered and is flagged as "
+                         "such). Requires --spreads; cannot be combined "
+                         "with --earnings-calendar.")
     args = ap.parse_args()
+
+    if args.dividend_calendar and not args.spreads:
+        ap.error("--dividend-calendar only applies with --spreads")
+    if args.dividend_calendar and args.earnings_calendar:
+        ap.error("--dividend-calendar and --earnings-calendar cannot be "
+                 "combined; run one comparison at a time")
 
     if args.offset_years and not args.regime_filter:
         ap.error("--offset-years only applies with --regime-filter")
@@ -304,6 +345,11 @@ def main() -> int:
         from options_screener.backtest import load_earnings_calendar
         earnings_calendar = load_earnings_calendar(args.earnings_calendar)
 
+    dividend_calendar = None
+    if args.dividend_calendar:
+        from options_screener.backtest import load_dividend_calendar
+        dividend_calendar = load_dividend_calendar(args.dividend_calendar)
+
     results, errors = {}, []
     for ticker in tickers:
         try:
@@ -334,6 +380,7 @@ def main() -> int:
                                   spreads=args.spreads,
                                   spread_widths=args.spread_widths,
                                   earnings_calendar=earnings_calendar,
+                                  dividend_calendar=dividend_calendar,
                                   regime_filter=args.regime_filter,
                                   offset_years=args.offset_years)
             results[ticker] = res
@@ -344,6 +391,18 @@ def main() -> int:
                       f"${f['total_pnl']:+,.2f} "
                       f"({len(res['filtered']['skipped'])} skipped, "
                       f"lookback {res['filtered']['lookback_days']}d)")
+            elif dividend_calendar is not None and args.spreads:
+                sb = (cfg.get("spread_backtest")
+                      or DEFAULT_SPREAD_BACKTEST)
+                first = sb["skews"][0]
+                pair = res["skews"][first]
+                p, f = pair["plain"]["summary"], pair["filtered"]["summary"]
+                print(f"[{ticker}] spreads skew {first}: plain "
+                      f"{p['trades']} trades ${p['total_pnl']:+,.2f}; "
+                      f"dividend-filtered {f['trades']} trades "
+                      f"${f['total_pnl']:+,.2f} "
+                      f"({len(pair['filtered']['skipped'])} entries skipped, "
+                      f"{res['calendar_dates']} calendar dates)")
             elif earnings_calendar is not None and args.spreads:
                 sb = (cfg.get("spread_backtest")
                       or DEFAULT_SPREAD_BACKTEST)
@@ -432,6 +491,13 @@ def main() -> int:
         md_path, json_path = write_reports(
             payload, args.out_dir, "backtest-regime-filter-multiwindow",
             render_regime_filter_multiwindow_markdown)
+    elif dividend_calendar is not None and args.spreads:
+        sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
+        payload = build_spread_dividend_payload(results, cfg, sb["skews"],
+                                                sb["width_pct"])
+        md_path, json_path = write_reports(payload, args.out_dir,
+                                           "backtest-spread-dividends",
+                                           render_spread_dividend_markdown)
     elif args.regime_filter:
         rf = cfg.get("regime_filter") or DEFAULT_REGIME_FILTER
         lookback = rf.get("lookback_days",

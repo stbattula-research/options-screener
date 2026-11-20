@@ -1289,6 +1289,8 @@ from datetime import timedelta as _timedelta
 
 from .earnings import earnings_status as _earnings_status
 from .earnings import parse_earnings_date as _parse_earnings_date
+from .dividends import dividend_status as _dividend_status
+from .dividends import parse_dividend_date as _parse_dividend_date
 
 
 def make_earnings_gate(entry_dates, earnings_dates):
@@ -2321,6 +2323,250 @@ def render_regime_filter_multiwindow_markdown(payload):
                  "grid-searched. The live screener takes no entry filter "
                  "from this mode.")
     lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)
+
+# ---------------------------------------------------------------------------
+# Dividend-aware spread backtest (v19)
+#
+# v12's live dividend handling is FLAG, don't exclude: a known ex-date
+# inside the option window prints in the report's Dividend column, and
+# the signal still goes out — the ex-date effect on a ~30-delta OTM put
+# is a nudge toward the short strike (plus higher early-assignment odds
+# if ITM near the date), not an overnight gap like earnings. But the
+# v7/v8 spread backtests never saw a dividend date at all, so this mode
+# asks the what-if question v11 asked for earnings: what would the
+# spread simulation have done if the OPT-IN exclusion
+# (dividends.exclude: true) had been on? Run the spread simulation
+# twice per skew (plain, then with the exclusion applied) and report
+# both side by side, with every skipped spread entry listed per skew.
+#
+# The gate is active only when dividends.enabled AND dividends.exclude
+# are both true — with the shipped default (exclude: false) the
+# filtered run equals the plain run and the report says the gate is
+# inactive, exactly like v10/v11 do for a disabled earnings gate. The
+# mode therefore never changes the live screener's behavior; it only
+# measures the exclusion rule the config already offers, so Sai can
+# decide whether flag-only is still the right default. Descriptive,
+# not a rule change — and per-skew entry timing may shift after a skip,
+# so compare plain vs filtered within one skew, as in v11.
+# ---------------------------------------------------------------------------
+
+def make_dividend_gate(entry_dates, dividend_dates):
+    """Build a gate callable for spread entries.
+
+    `entry_dates`: one `date` per price index (trading-day dates, in
+    order). `dividend_dates`: iterable of `date` (known ex-dividend
+    dates). Returns gate(entry_day, dte) -> the first ex-date inside
+    [entry_date, entry_date + dte calendar days], or None.
+
+    Raises ValueError if `entry_dates` is empty or its length differs
+    from the price series it will gate — a misaligned calendar must fail
+    loudly, not silently skip the wrong entries.
+    """
+    if not entry_dates:
+        raise ValueError("entry_dates must not be empty")
+    divs = sorted(d for d in dividend_dates if d is not None)
+
+    def gate(entry_day, dte):
+        if entry_day >= len(entry_dates):
+            raise ValueError(
+                f"entry_day {entry_day} beyond entry_dates "
+                f"({len(entry_dates)} entries)")
+        start = entry_dates[entry_day]
+        end = start + _timedelta(days=dte)
+        for d in divs:
+            status, _ = _dividend_status(d, start, end)
+            if status == "inside":
+                return d
+        return None
+
+    return gate
+
+
+def load_dividend_calendar(path):
+    """Load a JSON dividend calendar: {ticker: ["YYYY-MM-DD", ...]}.
+
+    Unparseable dates are dropped (a garbage calendar entry is an
+    "unknown", same as the live gate's rule), and tickers with no usable
+    dates map to an empty list. Raises on a missing file or non-object
+    JSON — a calendar that cannot be read must not silently mean "no
+    dividends anywhere".
+    """
+    with open(path) as f:
+        raw = _json.load(f)
+    if not isinstance(raw, dict):
+        raise ValueError("dividend calendar must be a JSON object "
+                         "{ticker: [dates]}")
+    calendar = {}
+    for ticker, dates in raw.items():
+        parsed = []
+        if isinstance(dates, (list, tuple)):
+            for d in dates:
+                got = _parse_dividend_date(d)
+                if got is not None:
+                    parsed.append(got)
+        calendar[ticker] = sorted(set(parsed))
+    return calendar
+
+
+def simulate_spreads_dividend_aware(prices, cfg, skew, width_pct,
+                                    entry_dates, dividend_dates):
+    """Run the spread simulation with the dividend exclusion applied.
+
+    Mirrors `simulate_spreads_earnings_aware` for dividends: returns
+    {"trades", "skipped", "summary", "gate_active"} where "summary" is
+    `summarize_spreads` (so avg credit/width and the credit-rule pass
+    rate are reported for the filtered run too). A gated entry is
+    never opened; the next attempt moves up by entry_interval_days.
+    The gate is active only when dividends.enabled AND
+    dividends.exclude are both true (the shipped default is flag-only,
+    so a default-config run reports gate inactive and filtered ==
+    plain). `entry_dates` must align with `prices` (same length); a
+    mismatch raises ValueError.
+    """
+    dcfg = cfg.get("dividends", {}) or {}
+    gate_active = bool(dcfg.get("enabled", True)
+                       and dcfg.get("exclude", False))
+    if not prices:
+        return {"trades": [], "skipped": [],
+                "summary": summarize_spreads([]),
+                "gate_active": gate_active}
+    if len(entry_dates) != len(prices):
+        raise ValueError(
+            f"entry_dates ({len(entry_dates)}) must align with prices "
+            f"({len(prices)})")
+    gate = (make_dividend_gate(entry_dates, dividend_dates)
+            if gate_active else None)
+
+    bt = cfg["backtest"]
+    dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
+                                  + cfg["strategy"]["dte_max"]) // 2
+    window, interval = bt["iv_window"], bt["entry_interval_days"]
+    n = len(prices)
+
+    trades, skipped = [], []
+    day = window
+    while day + dte < n:
+        if gate is not None:
+            hit = gate(day, dte)
+            if hit is not None:
+                skipped.append({"entry_day": day, "dte": dte,
+                                "dividend_date": hit.isoformat()})
+                day += interval
+                continue
+        sigma = estimate_iv(prices, day, window,
+                            bt["iv_multiplier"], bt["iv_fallback"])
+        trade = simulate_spread_trade(prices, day, dte, sigma, cfg, skew,
+                                      width_pct)
+        trades.append(trade)
+        day = max(trade["exit_day"] + 1, day + interval)
+    return {"trades": trades, "skipped": skipped,
+            "summary": summarize_spreads(trades),
+            "gate_active": gate_active}
+
+
+def build_spread_dividend_payload(results, cfg, skews, width_pct):
+    """results: {ticker: {"skews": {skew: {"plain": {"trades", "summary"},
+    "filtered": simulate_spreads_dividend_aware result}},
+    "calendar_dates": int}} -> report payload."""
+    return {
+        "mode": "Dividend-aware spread backtest",
+        "skews": skews,
+        "width_pct": width_pct,
+        "strategy": "bull put spreads over ~30-delta CSP strikes, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE",
+        "assumptions": ASSUMPTIONS + [
+            "Dividend gate tests the OPT-IN exclusion "
+            "(dividends.exclude: true): an entry is skipped when a "
+            "KNOWN ex-dividend date falls inside its option window "
+            "(entry date through entry date + DTE calendar days, "
+            "inclusive). A skipped spread entry is never opened; the "
+            "next attempt moves up by entry_interval_days. With the "
+            "shipped default (exclude: false) the gate is inactive and "
+            "the filtered run equals the plain run — the live screener "
+            "still flags, doesn't exclude.",
+            "Historical ex-dividend dates are caller-supplied (no free "
+            "source publishes them in a backtestable calendar). A ticker "
+            "with no calendar dates runs unfiltered and is flagged as "
+            "such — an empty calendar is a data gap, never evidence of "
+            "no dividend.",
+            "This comparison is descriptive: the filtered run shows what "
+            "the opt-in exclusion would have done to past model spread "
+            "trades. It does not prove excluding ex-dates helps or hurts "
+            "next period, and per-skew entry timing may shift after a "
+            "skip, so compare plain vs filtered within one skew.",
+        ],
+        "tickers": results,
+    }
+
+
+def render_spread_dividend_markdown(payload):
+    """Human-readable plain-vs-filtered spread report, one table per ticker."""
+    lines = ["# Options Screener — Dividend-Aware Spread Backtest "
+             "(research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy — this is NOT historical "
+             "option-chain data. The filtered run applies the opt-in "
+             "dividend exclusion (dividends.exclude: true) to spread "
+             "entries; the plain run does not. The live screener flags "
+             "ex-dates by default and does not exclude — this mode only "
+             "measures what exclusion would have done. Results are "
+             "illustrative research, not expected returns. See "
+             "Assumptions.",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             f"**Spread width:** {payload['width_pct']:.0%} of the short "
+             "strike. **Skews:** "
+             + ", ".join(str(s) for s in payload["skews"]) + ".",
+             ""]
+    for ticker, res in payload["tickers"].items():
+        lines.append(f"## {ticker}")
+        lines.append("")
+        lines.append("| Skew | Plain trades | Plain P&L | Filtered trades | "
+                     "Filtered P&L | Skipped | Credit/width (plain) | Gate |")
+        lines.append("|------|--------------|-----------|-----------------|"
+                     "--------------|---------|----------------------|------|")
+        for skew in payload["skews"]:
+            pair = res["skews"][skew]
+            plain, filt = pair["plain"]["summary"], pair["filtered"]["summary"]
+            gate = "active" if pair["filtered"]["gate_active"] else "inactive"
+            if not pair["filtered"]["gate_active"]:
+                skipped_note = "0 (gate off)"
+            elif not res.get("calendar_dates"):
+                skipped_note = (f"{len(pair['filtered']['skipped'])} "
+                                "(no calendar)")
+            else:
+                skipped_note = str(len(pair["filtered"]["skipped"]))
+            cf = plain["avg_credit_fraction"]
+            cf_cell = f"{cf:.3f}" if cf is not None else "—"
+            lines.append(
+                f"| {skew} | {plain['trades']} | "
+                f"${plain['total_pnl']:+,.2f} | {filt['trades']} | "
+                f"${filt['total_pnl']:+,.2f} | {skipped_note} | "
+                f"{cf_cell} | {gate} |")
+        for skew in payload["skews"]:
+            filt = res["skews"][skew]["filtered"]
+            if not filt["skipped"]:
+                continue
+            lines.append("")
+            lines.append(f"### {ticker} — skipped spread entries (skew {skew})")
+            lines.append("")
+            lines.append("| Entry day | DTE | Ex-dividend date |")
+            lines.append("|-----------|-----|------------------|")
+            for s in filt["skipped"]:
+                lines.append(f"| day {s['entry_day']} | {s['dte']} | "
+                             f"{s['dividend_date']} |")
+        lines.append("")
     lines.append("## Assumptions & limitations")
     lines.append("")
     for a in payload["assumptions"]:

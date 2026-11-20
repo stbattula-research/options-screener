@@ -132,6 +132,8 @@ earnings:
 # the effect on a ~30-delta OTM put is modest, not an overnight gap.
 # Set exclude: true to skip flagged signals; enabled: false turns the
 # feature off entirely. A missing calendar date renders as "unknown".
+# v19 backtests the opt-in exclusion on spreads:
+# python backtest.py --spreads --dividend-calendar calendar.json
 dividends:
   enabled: true
   exclude: false

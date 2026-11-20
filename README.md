@@ -468,6 +468,37 @@ itself evidence the deltas are period-sensitive. In the volatile
 84% vs 50% two years ago), so its +$211.56 median there is mostly the
 plain run wearing a filter's name.
 
+## Dividend-aware spread backtest (v19)
+
+The v12 live dividend handling is flag, don't exclude — but the v7/v8
+spread backtests never saw a dividend date at all, so their P&L
+described spread trades the opt-in exclusion would have skipped.
+`python backtest.py --spreads --dividend-calendar calendar.json`
+closes that gap the way v11 did for earnings: it runs the spread
+simulation twice per skew (plain, then with the `dividends.exclude`
+rule applied) and reports plain vs filtered side by side, with every
+skipped spread entry listed per skew.
+
+The one design point that matters: the gate is active only when
+`dividends.enabled` AND `dividends.exclude` are both true. With the
+shipped default (`exclude: false`) the filtered run equals the plain
+run and the report says the gate is inactive — the mode measures the
+exclusion rule, it never changes the live screener's flag-only
+default. The same honesty rules apply as v10/v11: caller-supplied
+calendars (no free source publishes historical ex-dividend dates in a
+backtestable calendar), empty calendar flagged as a data gap, and
+per-skew entry timing can shift after a skip, so the clean comparison
+is plain vs filtered *within* one skew. Live smoke (AAPL 1y, 4
+ex-dates 2026-02-09/05-11/08-10/11-12, exclusion on): 15 entries
+skipped at skew 0 — the Feb/May/Aug dates each blocked several
+successive attempts, the 35-day-window / 5-day-cadence effect v10
+measured (the Nov 12 date had no entry attempt in its window, since
+entries stop 35 trading days before the series end). Filtered ran
+below plain at skew 0 (+$39.95 → −$30.20) but above plain at skew 4
+(−$878.44 → −$283.61) — mixed, descriptive, no rule change. With the
+shipped flag-only default the same run reports gate inactive and
+filtered equals plain exactly.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -579,6 +610,19 @@ plain run wearing a filter's name.
   not a rule. The drawdown sub-pattern held up better (median DD gap
   negative in all three windows). Three windows agreeing is still not
   a rule — the live screener takes no entry filter from this mode).
+- v19: ✅ dividend-aware spread backtest (shipped 2026-11-20:
+  `python backtest.py --spreads --dividend-calendar calendar.json`
+  runs the spread simulation twice per skew — plain, then with the
+  opt-in dividend exclusion (`dividends.exclude: true`) applied — and
+  reports both side by side with every skipped spread entry listed
+  per skew. With the shipped flag-only default the gate is inactive
+  and filtered equals plain, exactly like v10/v11 for a disabled
+  earnings gate; the mode only measures the exclusion rule, it never
+  changes the live screener. Live smoke (AAPL 1y, 4 ex-dates, exclusion
+  on): 15 entries skipped at skew 0 (Feb/May/Aug dates each blocking
+  several attempts; Nov 12 had no attempt in its window); filtered
+  below plain at skew 0 (+$39.95 → −$30.20) but above plain at skew 4
+  (−$878.44 → −$283.61) — mixed, descriptive, no rule change.)
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime
