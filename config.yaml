@@ -107,6 +107,16 @@ spread_backtest:
   skews: [0.0, 1.0, 2.0, 4.0]  # 0 = flat Black-Scholes; 2 ~= observed SPY put skew
   width_pct: 0.02               # narrow end of the live spread: 2-6% band
 
+# v20 structure comparison: runs the v1 CSP and the v2 bull-put spread
+# over the SAME entry-attempt schedule (every entry_interval_days from
+# the IV window, one position at a time per structure) and reports both
+# side by side, so the comparison isolates the structure, not the
+# calendar. Skew/width are the spread's model parameters; the CSP side
+# ignores them. Run: python backtest.py --structure-compare --all
+structure_compare:
+  skew: 2.0        # middle of the spread_backtest sweep; ~= observed SPY put skew
+  width_pct: 0.02  # narrow end of the live 2-6% band, as in v7/v8
+
 # v8 spread-width sweep: re-runs the spread simulation once per wing
 # width at a FIXED skew, to measure where the live 1/3-width credit
 # rule starts passing and what passing costs in total P&L. Run:

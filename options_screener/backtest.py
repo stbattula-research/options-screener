@@ -2577,3 +2577,263 @@ def render_spread_dividend_markdown(payload):
                  "risking capital._")
     lines.append("")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Structure comparison (v20)
+#
+# The two live structures — the v1 cash-secured put and the v2 bull-put
+# spread built over the same ~30-delta short strike — have only ever been
+# backtested separately, each advancing past its OWN exits. Their entry
+# cadences therefore drift apart, so "which structure earned more" was
+# never answered on equal footing. This mode fixes one attempt schedule
+# (every entry_interval_days from the IV window, one position at a time
+# per structure; an attempt that lands while a position is still open is
+# skipped and counted) and runs BOTH structures over it, same strikes,
+# same DTE, same exit rules. The only difference is the structure itself.
+#
+# Read the numbers with the capital bases in mind: per-contract P&L is
+# the like-for-like dollar number, but avg return on risk is NOT
+# comparable across structures — the CSP risks roughly the strike (cash
+# secured), the spread risks only width minus credit, by construction.
+# The report prints avg max loss per contract next to avg P&L per trade
+# so the trade-off is visible instead of hidden inside one ratio.
+# Model-based like the rest of the backtester; signals only.
+# ---------------------------------------------------------------------------
+
+DEFAULT_STRUCTURE_COMPARE = {
+    "skew": 2.0,       # middle of the spread_backtest sweep; ~= observed
+    # SPY put skew (see spread_backtest: comment)
+    "width_pct": 0.02,  # narrow end of the live 2-6% band, as in v7/v8
+}
+
+
+def attempt_days(n, window, interval, dte):
+    """Entry-attempt days: every `interval` days from `window`, each with
+    a full `dte` of future data ahead of it (day + dte < n). The last
+    attempts that cannot resolve are never attempted."""
+    days = []
+    day = window
+    while day + dte < n:
+        days.append(day)
+        day += interval
+    return days
+
+
+def simulate_structure_on_schedule(prices, cfg, days, structure, skew=None,
+                                   width_pct=None):
+    """Run one structure over a fixed attempt schedule.
+
+    `days` is the attempt schedule (see attempt_days). One position at a
+    time: an attempt that lands on or before the open trade's exit day
+    is skipped and counted, never opened alongside it. Returns (trades,
+    skipped): the trades plus the number of attempts skipped because a
+    position was still open. `structure` is "csp" or "spread"; anything
+    else raises ValueError instead of silently simulating the wrong thing.
+    """
+    if structure not in ("csp", "spread"):
+        raise ValueError(f"unknown structure {structure!r}: want 'csp' "
+                         "or 'spread'")
+    bt = cfg["backtest"]
+    dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
+                                  + cfg["strategy"]["dte_max"]) // 2
+    window = bt["iv_window"]
+    trades, skipped, busy_until = [], 0, -1
+    for day in days:
+        if day <= busy_until:
+            skipped += 1
+            continue
+        sigma = estimate_iv(prices, day, window,
+                            bt["iv_multiplier"], bt["iv_fallback"])
+        if structure == "csp":
+            trade = simulate_trade(prices, day, dte, sigma, cfg)
+        else:
+            trade = simulate_spread_trade(prices, day, dte, sigma, cfg,
+                                          skew, width_pct)
+        trades.append(trade)
+        busy_until = trade["exit_day"]
+    return trades, skipped
+
+
+def avg_max_loss_per_contract(trades, structure):
+    """Mean capital at risk per trade, in dollars per contract.
+
+    CSP: (strike - premium received) x 100 — the cash-secured loss if the
+    underlying went to zero. Spread: the trade's own max_loss_per_contract
+    (width - net credit, capped by construction). None when there are no
+    trades. This is the number the avg return on risk divides by, printed
+    next to avg P&L so the two structures' risk is compared in dollars,
+    not hidden inside one ratio.
+    """
+    if not trades:
+        return None
+    if structure == "csp":
+        losses = [(t["strike"] - t["premium_per_share"]) * 100
+                  for t in trades]
+    elif structure == "spread":
+        losses = [t["max_loss_per_contract"] for t in trades]
+    else:
+        raise ValueError(f"unknown structure {structure!r}: want 'csp' "
+                         "or 'spread'")
+    return round(sum(losses) / len(losses), 2)
+
+
+def compare_structures(prices, cfg, skew, width_pct):
+    """Run the CSP and the bull-put spread over one shared attempt schedule.
+
+    Returns {"attempts", "skew", "width_pct", "csp": {...}, "spread":
+    {...}} where each side holds {"trades", "summary",
+    "avg_max_loss_per_contract", "skipped"}. The spread summary is the
+    spread-aware one (avg credit/width + credit-rule pass rate included),
+    so the report can say how often the spread even met the live entry
+    rule on this schedule. Trades are recorded even when the credit rule
+    fails — the pass rate is measured, not assumed.
+    """
+    bt = cfg["backtest"]
+    dte = bt.get("entry_dte") or (cfg["strategy"]["dte_min"]
+                                  + cfg["strategy"]["dte_max"]) // 2
+    days = attempt_days(len(prices), bt["iv_window"],
+                        bt["entry_interval_days"], dte)
+    csp_trades, csp_skipped = simulate_structure_on_schedule(
+        prices, cfg, days, "csp")
+    spread_trades, spread_skipped = simulate_structure_on_schedule(
+        prices, cfg, days, "spread", skew=skew, width_pct=width_pct)
+    return {
+        "attempts": len(days),
+        "skew": skew,
+        "width_pct": width_pct,
+        "csp": {"trades": csp_trades,
+                "summary": summarize(csp_trades),
+                "avg_max_loss_per_contract":
+                    avg_max_loss_per_contract(csp_trades, "csp"),
+                "skipped": csp_skipped},
+        "spread": {"trades": spread_trades,
+                   "summary": summarize_spreads(spread_trades),
+                   "avg_max_loss_per_contract":
+                       avg_max_loss_per_contract(spread_trades, "spread"),
+                   "skipped": spread_skipped},
+    }
+
+
+def build_structure_compare_payload(results, cfg, skew, width_pct):
+    """results: {ticker: compare_structures(...)} -> JSON-serializable
+    report payload."""
+    return {
+        "mode": "CSP vs bull-put-spread head-to-head",
+        "skew": skew,
+        "width_pct": width_pct,
+        "strategy": "same ~30-delta short put, "
+                    f"{cfg['backtest'].get('entry_dte') or 'mid-band'} DTE, "
+                    "same attempt schedule, same exit rules — the only "
+                    "difference is the structure",
+        "assumptions": ASSUMPTIONS + [
+            "Both structures attempt entries on the SAME schedule: every "
+            "entry_interval_days trading days from the IV window, one "
+            "position at a time per structure. An attempt that lands while "
+            "a position is still open is skipped and counted, so the two "
+            "sides never hold overlapping positions and never trade on "
+            "different calendars.",
+            "The spread is priced at one skew value (see skew) and one "
+            "width (see width_pct); the skew is a shape parameter, not a "
+            "fitted smile, and the short strike is found at the ATM IV "
+            "proxy exactly as in the plain CSP backtest.",
+            "Per-contract P&L is the like-for-like dollar number. Avg "
+            "return on risk is NOT comparable across structures: the CSP "
+            "divides by roughly the strike (cash-secured capital), the "
+            "spread divides by width minus credit (defined-risk capital). "
+            "Avg max loss per contract is printed next to avg P&L per "
+            "trade so the capital each structure put at risk is visible.",
+            "Spread trades are recorded even when the live 1/3-width "
+            "credit rule fails, so the credit-rule pass rate is measured, "
+            "not assumed.",
+        ],
+        "tickers": results,
+    }
+
+
+def _structure_row_md(label, res):
+    s = res["summary"]
+    if s["trades"] == 0:
+        return f"| {label} | 0 | — | — | — | — | — | — | — | — |"
+    max_loss = res["avg_max_loss_per_contract"]
+    max_loss_cell = f"${max_loss:,.2f}" if max_loss is not None else "—"
+    cf = s.get("avg_credit_fraction")
+    cf_cell = f"{cf:.3f}" if cf is not None else "—"
+    return (f"| {label} | {s['trades']} | {s['win_rate']:.1%} | "
+            f"${s['total_pnl']:+,.2f} | ${s['avg_pnl_per_trade']:+,.2f} | "
+            f"{s['avg_return_on_risk']:.2%} | {max_loss_cell} | "
+            f"${s['max_drawdown']:,.2f} | {s['avg_days_held']:.0f} | "
+            f"{res['skipped']} | {cf_cell} |")
+
+
+def _structure_reading(ticker, res):
+    """One plain reading line per ticker, or None when a side never traded.
+
+    Names which structure made more per contract and how much less
+    capital the spread put at risk — the defined-risk trade in one
+    sentence. It never compares the two avg return-on-risk percentages,
+    because they divide by different capital bases.
+    """
+    csp, spr = res["csp"]["summary"], res["spread"]["summary"]
+    if not csp["trades"] or not spr["trades"]:
+        return None
+    csp_pnl, spr_pnl = csp["total_pnl"], spr["total_pnl"]
+    if spr_pnl > csp_pnl:
+        pnl_line = (f"the spread made ${spr_pnl - csp_pnl:+,.2f} more per "
+                    "contract")
+    elif csp_pnl > spr_pnl:
+        pnl_line = (f"the CSP made ${csp_pnl - spr_pnl:+,.2f} more per "
+                    "contract")
+    else:
+        pnl_line = "both structures made the same per contract"
+    csp_risk = res["csp"]["avg_max_loss_per_contract"]
+    spr_risk = res["spread"]["avg_max_loss_per_contract"]
+    return (f"Reading for {ticker}: {pnl_line}, and the spread risked "
+            f"${csp_risk - spr_risk:,.2f} less capital per trade "
+            f"(${spr_risk:,.2f} vs ${csp_risk:,.2f}). The spread's return "
+            "on risk divides by width minus credit, the CSP's by roughly "
+            "the strike — compare the dollar columns, not the percentages.")
+
+
+def render_structure_compare_markdown(payload):
+    """Human-readable CSP-vs-spread head-to-head report, one table per ticker."""
+    lines = ["# Options Screener — CSP vs Bull-Put-Spread Head-to-Head "
+             "(research only)",
+             "",
+             "> **Model-based simulation.** Premiums are priced with "
+             "Black-Scholes against an IV proxy — this is NOT historical "
+             "option-chain data. Both structures run over the SAME entry "
+             "schedule, so the comparison isolates the structure, not the "
+             "calendar. Results are illustrative research, not expected "
+             "returns. See Assumptions.",
+             "",
+             f"**Strategy:** {payload['strategy']}",
+             f"**Spread skew:** {payload['skew']}. **Spread width:** "
+             f"{payload['width_pct']:.0%} of the short strike.",
+             ""]
+    for ticker, res in payload["tickers"].items():
+        lines.append(f"## {ticker} — {res['attempts']} entry attempts")
+        lines.append("")
+        lines.append("| Structure | Trades | Win rate | Total P&L | "
+                     "Avg/trade | Avg RoR | Avg max loss | Max DD | "
+                     "Avg days | Skipped | Credit/width |")
+        lines.append("|-----------|--------|----------|-----------|-----------|"
+                     "---------|--------|--------------|--------|----------|"
+                     "---------|--------------|")
+        lines.append(_structure_row_md("Cash-secured put", res["csp"]))
+        lines.append(_structure_row_md("Bull put spread", res["spread"]))
+        lines.append("")
+        reading = _structure_reading(ticker, res)
+        if reading:
+            lines.append(reading)
+            lines.append("")
+    lines.append("## Assumptions & limitations")
+    lines.append("")
+    for a in payload["assumptions"]:
+        lines.append(f"- {a}")
+    lines.append("")
+    lines.append("_Educational research tool, not financial advice. Options "
+                 "involve substantial risk of loss; paper-trade before "
+                 "risking capital._")
+    lines.append("")
+    return "\n".join(lines)

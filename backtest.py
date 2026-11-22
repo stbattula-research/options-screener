@@ -33,6 +33,10 @@ Usage:
     ticker (v18: the third window v16/v17 left open, counted rather
     than eyeballed). One fetch per ticker; windows are sliced from the
     same series.
+    --structure-compare runs the v1 CSP and the v2 bull-put spread over
+    the SAME entry-attempt schedule (v20: same strikes, same DTE, same
+    exits — the only difference is the structure) and reports both side
+    by side, with avg max loss per contract next to avg P&L per trade.
 """
 
 import argparse
@@ -46,6 +50,7 @@ import yaml
 from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        DEFAULT_SPREAD_BACKTEST,
                                        DEFAULT_SPREAD_WIDTH_SWEEP,
+                                       DEFAULT_STRUCTURE_COMPARE,
                                        DEFAULT_SWEEP_GRID,
                                        build_backtest_payload,
                                        build_earnings_payload,
@@ -56,10 +61,12 @@ from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        build_spread_dividend_payload,
                                        build_spread_earnings_payload,
                                        build_spread_payload,
+                                       build_structure_compare_payload,
                                        build_sweep_payload,
                                        build_width_payload,
                                        compare_regime_filter,
                                        compare_regime_splits,
+                                       compare_structures,
                                        default_sweep_key, rank_sweep,
                                        parse_regime_windows,
                                        render_backtest_markdown,
@@ -71,6 +78,7 @@ from options_screener.backtest import (DEFAULT_REGIME_FILTER,
                                        render_spread_dividend_markdown,
                                        render_spread_earnings_markdown,
                                        render_spread_markdown,
+                                       render_structure_compare_markdown,
                                        render_sweep_markdown,
                                        render_width_markdown,
                                        simulate, simulate_earnings_aware,
@@ -140,7 +148,15 @@ def backtest_ticker_multiwindow(ticker, cfg, years, offsets):
 def backtest_ticker(ticker, cfg, years, sweep=False, regimes=False,
                     spreads=False, spread_widths=False,
                     earnings_calendar=None, dividend_calendar=None,
-                    regime_filter=False, offset_years=0):
+                    regime_filter=False, offset_years=0,
+                    structure_compare=False):
+    if structure_compare:
+        closes = get_closes(ticker, period=f"{years}y")
+        sc = cfg.get("structure_compare") or DEFAULT_STRUCTURE_COMPARE
+        return compare_structures(
+            closes, cfg,
+            sc.get("skew", DEFAULT_STRUCTURE_COMPARE["skew"]),
+            sc.get("width_pct", DEFAULT_STRUCTURE_COMPARE["width_pct"]))
     if regime_filter:
         window = None
         if offset_years:
@@ -284,6 +300,13 @@ def main() -> int:
                          "window plus the windows ending 2 and 4 years "
                          "ago, aggregated per ticker). Cannot be combined "
                          "with --offset-years.")
+    ap.add_argument("--structure-compare", action="store_true",
+                    help="run the v20 head-to-head: the v1 CSP and the v2 "
+                         "bull-put spread over the SAME entry-attempt "
+                         "schedule (same strikes, same DTE, same exits), "
+                         "reported side by side with avg max loss per "
+                         "contract next to avg P&L per trade. Spread skew "
+                         "and width come from structure_compare: in config.")
     ap.add_argument("--earnings-calendar", default=None, metavar="FILE",
                     help="JSON file {ticker: [\"YYYY-MM-DD\", ...]} of known "
                          "earnings dates: re-run the simulation with the "
@@ -382,9 +405,21 @@ def main() -> int:
                                   earnings_calendar=earnings_calendar,
                                   dividend_calendar=dividend_calendar,
                                   regime_filter=args.regime_filter,
-                                  offset_years=args.offset_years)
+                                  offset_years=args.offset_years,
+                                  structure_compare=args.structure_compare)
             results[ticker] = res
-            if args.regime_filter:
+            if args.structure_compare:
+                c, s = res["csp"]["summary"], res["spread"]["summary"]
+                cml = res["csp"]["avg_max_loss_per_contract"]
+                sml = res["spread"]["avg_max_loss_per_contract"]
+                cml_cell = f"${cml:,.2f}" if cml is not None else "—"
+                sml_cell = f"${sml:,.2f}" if sml is not None else "—"
+                print(f"[{ticker}] CSP {c['trades']} trades "
+                      f"${c['total_pnl']:+,.2f} (avg max loss {cml_cell}); "
+                      f"spread {s['trades']} trades "
+                      f"${s['total_pnl']:+,.2f} (avg max loss {sml_cell}); "
+                      f"{res['attempts']} attempts")
+            elif args.regime_filter:
                 p, f = res["plain"]["summary"], res["filtered"]["summary"]
                 print(f"[{ticker}] regime filter: plain {p['trades']} trades "
                       f"${p['total_pnl']:+,.2f}; filtered {f['trades']} trades "
@@ -491,6 +526,15 @@ def main() -> int:
         md_path, json_path = write_reports(
             payload, args.out_dir, "backtest-regime-filter-multiwindow",
             render_regime_filter_multiwindow_markdown)
+    elif args.structure_compare:
+        sc = cfg.get("structure_compare") or DEFAULT_STRUCTURE_COMPARE
+        payload = build_structure_compare_payload(
+            results, cfg,
+            sc.get("skew", DEFAULT_STRUCTURE_COMPARE["skew"]),
+            sc.get("width_pct", DEFAULT_STRUCTURE_COMPARE["width_pct"]))
+        md_path, json_path = write_reports(
+            payload, args.out_dir, "backtest-structure-compare",
+            render_structure_compare_markdown)
     elif dividend_calendar is not None and args.spreads:
         sb = cfg.get("spread_backtest") or DEFAULT_SPREAD_BACKTEST
         payload = build_spread_dividend_payload(results, cfg, sb["skews"],

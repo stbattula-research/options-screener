@@ -623,6 +623,21 @@ filtered equals plain exactly.
   several attempts; Nov 12 had no attempt in its window); filtered
   below plain at skew 0 (+$39.95 → −$30.20) but above plain at skew 4
   (−$878.44 → −$283.61) — mixed, descriptive, no rule change.)
+- v20: ✅ CSP vs bull-put-spread head-to-head (shipped 2026-11-22:
+  `python backtest.py --structure-compare --all --years 2` runs the v1
+  CSP and the v2 bull-put spread over the SAME entry-attempt schedule
+  (every 5 trading days from the IV window, one position at a time per
+  structure; attempts landing on an open position are skipped and
+  counted) — same strikes, same DTE, same exit rules — and reports both
+  side by side with avg max loss per contract next to avg P&L per trade,
+  because avg return on risk divides by different capital bases (CSP:
+  roughly the strike; spread: width minus credit) and is not comparable
+  across structures. Live smoke (15 tickers, 2y, skew 2.0, width 2%):
+  the CSP made more per contract than the spread on 13 of 15 tickers
+  (exceptions: SPY and META, where the spread lost less); the spread
+  risked roughly 65x less capital per trade (e.g. SPY $993 vs $64,114)
+  — the defined-risk trade in one sentence. The report names the
+  per-ticker winner in dollars, not percentages.)
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime
