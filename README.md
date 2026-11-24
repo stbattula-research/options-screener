@@ -499,6 +499,30 @@ below plain at skew 0 (+$39.95 → −$30.20) but above plain at skew 4
 shipped flag-only default the same run reports gate inactive and
 filtered equals plain exactly.
 
+## Dividend-aware paper-position marking (v21)
+
+The v12 flag only checks the ex-date at signal time — but a paper
+position lives 30–45 days, and an ex-date can be announced *after* it
+opens, or was simply unknown when it opened. Every `--paper-track`
+mark now re-checks each open position's ticker against its *remaining*
+window (today to expiry) and records the exposure on the position:
+`inside` with the ex-date (shown ⚠ in the Paper positions tables),
+`outside`, or `unknown` when the calendar has nothing. Positions also
+carry what was known at entry, copied from the signal's v12 flag
+result. This is the dividend twin of v13's earnings check, and the
+two columns sit side by side in the Paper positions tables.
+
+The flag is informational only, stated in the report itself: a
+position never exits early on a dividend — exits stay mechanical
+(50% profit / 21 DTE / 2x-premium loss). The same honesty rules apply
+as v12: an `unknown` calendar is a data gap, never evidence of no
+dividend, and the check is config-gated (`paper.dividend_check`,
+default on). The effect is a nudge, not a gap: the stock drops by
+roughly the dividend on the ex-date, pulling the underlying toward
+the short strike and raising early-assignment odds if the put is in
+the money near the date — worth seeing on a live position, not worth
+exiting on.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -638,6 +662,14 @@ filtered equals plain exactly.
   risked roughly 65x less capital per trade (e.g. SPY $993 vs $64,114)
   — the defined-risk trade in one sentence. The report names the
   per-ticker winner in dollars, not percentages.)
+- v21: ✅ dividend-aware paper-position marking (shipped 2026-11-24:
+  every `--paper-track` mark re-checks each open position's next
+  ex-dividend date against its remaining window and flags it in the
+  Paper positions tables — the dividend twin of v13's earnings check.
+  The v12 flag only checked the ex-date at signal time, but a paper
+  position lives 30–45 days and an ex-date can be announced after
+  entry, or was unknown at entry. Informational only, exits stay
+  mechanical; a position never exits early on a dividend.)
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime

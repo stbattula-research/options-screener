@@ -188,6 +188,11 @@ paper:
                           # every mark; informational only, never exits a
                           # position — a position can become exposed after
                           # opening (date announced later / unknown at entry)
+  dividend_check: true    # v21: same re-check for the next ex-dividend
+                          # date vs [today, expiry]; informational only —
+                          # an ex-date inside the remaining window is a
+                          # nudge toward the short strike, not a reason to
+                          # exit early
   exposure_alerts: true   # v14: alert (same email/webhook channels as
                           # alerts:) when a still-open position BECOMES
                           # earnings-exposed at a mark; once per

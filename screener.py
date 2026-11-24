@@ -159,6 +159,14 @@ def run_paper_tracking(payload: dict, cfg: dict, market: dict,
         earnings_map = {}
         for ticker in {p["ticker"] for p in store["open"]}:
             earnings_map[ticker] = get_next_earnings(ticker)
+    # v21: same re-check for the next ex-dividend date. A position can
+    # become dividend-exposed after it opens (ex-date announced later,
+    # or unknown at entry); get_next_dividend never raises either.
+    dividends_map = None
+    if pcfg.get("dividend_check", True) and store["open"]:
+        dividends_map = {}
+        for ticker in {p["ticker"] for p in store["open"]}:
+            dividends_map[ticker] = get_next_dividend(ticker)
     snapshots = {}
     for pos in store["open"]:
         mkt = market.get(pos["ticker"])
@@ -169,7 +177,8 @@ def run_paper_tracking(payload: dict, cfg: dict, market: dict,
             snapshots[pos["key"]] = snap
     result = exits_mod.update_positions(store, snapshots, cfg["exits"],
                                         as_of=as_of,
-                                        earnings_map=earnings_map)
+                                        earnings_map=earnings_map,
+                                        dividends_map=dividends_map)
     exits_mod.save_store(state_dir, store)
 
     # v14: a position that became earnings-exposed at this mark gets an

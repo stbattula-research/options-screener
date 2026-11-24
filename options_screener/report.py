@@ -102,6 +102,17 @@ def _position_earnings_cell(p: dict) -> str:
     return _earnings_cell(p)
 
 
+def _position_dividend_cell(p: dict) -> str:
+    """Render a paper position's dividend-exposure cell. '—' when the
+    position was never dividend-checked (opened before v21, or the check
+    is off in config); otherwise the shared signal rendering — the
+    ex-date with ⚠ when it falls inside the remaining window, 'unknown'
+    when the calendar had nothing."""
+    if "dividends" not in p:
+        return "—"
+    return _dividend_cell(p)
+
+
 def render_paper_section(paper: dict) -> list:
     """Markdown for the paper position-tracking section."""
     lines = ["## Paper positions (research)", "",
@@ -143,20 +154,20 @@ def render_paper_section(paper: dict) -> list:
     if closed:
         lines.append("### Closed today")
         lines.append("")
-        lines.append("| Ticker | Position | Opened | Exit | P&L/contract | Earnings |")
-        lines.append("|---|---|---|---|---|---|")
+        lines.append("| Ticker | Position | Opened | Exit | P&L/contract | Earnings | Dividend |")
+        lines.append("|---|---|---|---|---|---|---|")
         for c in closed:
             lines.append(
                 f"| {c['ticker']} | {_position_label(c)} | {c['opened']} | "
                 f"{c['exit_reason']} | ${c['realized']:+.2f} | "
-                f"{_position_earnings_cell(c)} |")
+                f"{_position_earnings_cell(c)} | {_position_dividend_cell(c)} |")
         lines.append("")
     if open_:
         lines.append("### Open")
         lines.append("")
         lines.append("| Ticker | Position | Entry credit | Mark | "
-                     "Unrealized | DTE | Days held | Earnings |")
-        lines.append("|---|---|---|---|---|---|---|---|")
+                     "Unrealized | DTE | Days held | Earnings | Dividend |")
+        lines.append("|---|---|---|---|---|---|---|---|---|")
         for p in open_:
             unreal = (f"${p['last_unrealized']:+.2f}"
                       if p.get("last_unrealized") is not None else "stale")
@@ -167,16 +178,22 @@ def render_paper_section(paper: dict) -> list:
             lines.append(
                 f"| {p['ticker']} | {_position_label(p)} | "
                 f"${p['entry_credit']:.2f} | {mark} | {unreal} | "
-                f"{dte} | {held} | {_position_earnings_cell(p)} |")
+                f"{dte} | {held} | {_position_earnings_cell(p)} | "
+                f"{_position_dividend_cell(p)} |")
         lines.append("")
     lines.append("Earnings exposure is re-checked at every mark against the "
                  "position's remaining window (today to expiry) and shown "
-                 "with ⚠ when a known date falls inside it. It is "
-                 "informational only — a position never exits early on "
-                 "earnings; exits stay mechanical. A position can become "
-                 "exposed after opening, when the date is announced later "
-                 "or was unknown at entry; `unknown` is a gap in the "
-                 "calendar data, not evidence of no earnings.")
+                 "with ⚠ when a known date falls inside it. Dividend "
+                 "exposure is re-checked the same way (v21): an ex-date "
+                 "inside the remaining window is shown with ⚠ in the "
+                 "Dividend column — the stock drops by roughly the dividend "
+                 "on the ex-date, a nudge toward the short strike, not an "
+                 "overnight gap. Both are informational only — a position "
+                 "never exits early on earnings or a dividend; exits stay "
+                 "mechanical. A position can become exposed after opening, "
+                 "when the date is announced later or was unknown at entry; "
+                 "`unknown` is a gap in the calendar data, not evidence of "
+                 "no earnings or no dividend.")
     lines.append("")
     return lines
 
@@ -310,7 +327,9 @@ def render_markdown(payload: dict) -> str:
         "by later alerts. State lives in `positions/` (git-ignored). "
         "Earnings exposure is re-checked at every mark against the "
         "position's remaining window and shown in the Earnings column — "
-        "informational only, it never triggers an exit. When a still-open "
+        "informational only, it never triggers an exit. Dividend exposure "
+        "is re-checked the same way (v21) and shown in the Dividend "
+        "column. When a still-open "
         "position becomes earnings-exposed at a mark (v14), the report "
         "names it and — on runs invoked with `--alerts` — the same "
         "email/webhook channels send one alert per position+earnings-date, "

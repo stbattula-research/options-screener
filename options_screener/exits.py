@@ -21,6 +21,7 @@ import math
 import os
 from datetime import date
 
+from .dividends import dividend_status
 from .earnings import earnings_status
 from .filters import quote_stats
 
@@ -63,6 +64,10 @@ def open_from_signal(sig: dict, opened: str | None = None) -> dict:
     # earnings info, so the position records it; later marks refresh it.
     if sig.get("earnings"):
         pos["earnings"] = dict(sig["earnings"])
+    # Same for the v12 dividend flag: the signal's ex-date info is the
+    # position's entry exposure; later marks refresh it.
+    if sig.get("dividends"):
+        pos["dividends"] = dict(sig["dividends"])
     return pos
 
 
@@ -92,6 +97,9 @@ def open_from_spread(sp: dict, opened: str | None = None) -> dict:
     # (if the spread dict carries it) is the position's entry exposure.
     if sp.get("earnings"):
         pos["earnings"] = dict(sp["earnings"])
+    # Same for the v12 dividend flag.
+    if sp.get("dividends"):
+        pos["dividends"] = dict(sp["dividends"])
     return pos
 
 
@@ -122,6 +130,38 @@ def attach_earnings_exposure(position: dict, next_earnings,
         "date": earn_date.isoformat() if earn_date else None,
     }
     return position["earnings"]
+
+
+def attach_dividend_exposure(position: dict, next_ex_date,
+                             as_of) -> dict:
+    """Attach dividend exposure to a paper position, as of a mark date.
+
+    The window is the position's REMAINING life — [as_of, expiry] —
+    reusing the v12 `dividend_status` (inclusive both ends). A position
+    can become dividend-exposed after it opens: the ex-date may have
+    been unknown at entry, or announced later. Returns the attached dict
+    {"status": "inside"|"outside"|"unknown", "date": ISO str | None}.
+
+    Never raises: an unparseable expiry or as_of renders "unknown", the
+    same honesty rule as the v12 flag — a missing date is a data gap,
+    never evidence of no dividend. The flag is informational only, like
+    the earnings one: it never changes the exit rules — the ex-date is
+    a nudge toward the short strike plus higher early-assignment odds
+    if the put is ITM near the date, not an overnight gap.
+    """
+    try:
+        as_of_date = (as_of if isinstance(as_of, date)
+                      else date.fromisoformat(as_of))
+        expiry = date.fromisoformat(position["expiry"])
+    except (ValueError, TypeError, AttributeError, KeyError):
+        position["dividends"] = {"status": "unknown", "date": None}
+        return position["dividends"]
+    status, ex_date = dividend_status(next_ex_date, as_of_date, expiry)
+    position["dividends"] = {
+        "status": status,
+        "date": ex_date.isoformat() if ex_date else None,
+    }
+    return position["dividends"]
 
 
 def _per_contract(value_per_share: float, contracts: int) -> float:
@@ -335,7 +375,8 @@ def open_positions(candidates: list, store: dict, max_open: int) -> list:
 
 def update_positions(store: dict, marks: dict, exits_cfg: dict,
                      as_of: str | None = None,
-                     earnings_map: dict | None = None) -> dict:
+                     earnings_map: dict | None = None,
+                     dividends_map: dict | None = None) -> dict:
     """Mark every open position against today's chain and apply exit rules.
 
     marks: {position_key: snapshot dict} — the caller builds snapshots from
@@ -347,6 +388,10 @@ def update_positions(store: dict, marks: dict, exits_cfg: dict,
     entry. The flag is informational only: it never changes the exit
     rules. When no map is supplied, a position keeps whatever earnings
     info it already carries.
+    dividends_map: same shape and same rules for the next ex-dividend
+    date (v21, the dividend twin of the v13 earnings check): when
+    supplied, each position's dividend exposure is refreshed against
+    its remaining window. Informational only, like the earnings flag.
     Returns {"updated": [...statuses...], "closed_today": [...positions...],
              "newly_exposed": [...positions...]} — "newly_exposed" holds
     the still-open positions whose earnings exposure flipped to "inside"
@@ -368,8 +413,12 @@ def update_positions(store: dict, marks: dict, exits_cfg: dict,
         if earnings_map is not None and pos["ticker"] in earnings_map:
             attach_earnings_exposure(pos, earnings_map[pos["ticker"]],
                                      as_of)
+        if dividends_map is not None and pos["ticker"] in dividends_map:
+            attach_dividend_exposure(pos, dividends_map[pos["ticker"]],
+                                     as_of)
         status = evaluate(pos, snap, exits_cfg)
         status["earnings"] = pos.get("earnings")
+        status["dividends"] = pos.get("dividends")
         pos["last_mark"] = snap["mark"]
         pos["last_dte"] = snap["dte"]
         pos["last_seen"] = as_of
