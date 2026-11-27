@@ -393,16 +393,19 @@ def update_positions(store: dict, marks: dict, exits_cfg: dict,
     supplied, each position's dividend exposure is refreshed against
     its remaining window. Informational only, like the earnings flag.
     Returns {"updated": [...statuses...], "closed_today": [...positions...],
-             "newly_exposed": [...positions...]} — "newly_exposed" holds
-    the still-open positions whose earnings exposure flipped to "inside"
-    at this mark (from outside/unknown, or to a different date while
-    inside). A position that closes at this mark is never newly exposed:
+             "newly_exposed": [...positions...],
+             "newly_dividend_exposed": [...positions...]} — "newly_exposed"
+    holds the still-open positions whose earnings exposure flipped to
+    "inside" at this mark (from outside/unknown, or to a different date
+    while inside); "newly_dividend_exposed" is the same flip for the
+    next ex-dividend date (v22, the dividend twin of the v14 earnings
+    alert). A position that closes at this mark is never newly exposed:
     there is nothing left to warn about. The caller decides what to do
-    with the list (v14 alerts on it); the positions themselves are the
-    live store dicts, already carrying the refreshed exposure.
+    with the lists (v14/v22 alert on them); the positions themselves are
+    the live store dicts, already carrying the refreshed exposure.
     """
     as_of = as_of or date.today().isoformat()
-    updated, closed, newly_exposed = [], [], []
+    updated, closed, newly_exposed, newly_div_exposed = [], [], [], []
     still_open = []
     for pos in store["open"]:
         snap = marks.get(pos["key"])
@@ -410,6 +413,7 @@ def update_positions(store: dict, marks: dict, exits_cfg: dict,
             snap = {"date": as_of, "underlying": None,
                     "mark": None, "dte": None}
         prev_earnings = dict(pos.get("earnings") or {})
+        prev_dividends = dict(pos.get("dividends") or {})
         if earnings_map is not None and pos["ticker"] in earnings_map:
             attach_earnings_exposure(pos, earnings_map[pos["ticker"]],
                                      as_of)
@@ -441,7 +445,14 @@ def update_positions(store: dict, marks: dict, exits_cfg: dict,
                          or prev_earnings.get("date")
                          != new_earnings.get("date"))):
                 newly_exposed.append(pos)
+            new_dividends = pos.get("dividends") or {}
+            if (new_dividends.get("status") == "inside"
+                    and (prev_dividends.get("status") != "inside"
+                         or prev_dividends.get("date")
+                         != new_dividends.get("date"))):
+                newly_div_exposed.append(pos)
     store["open"] = still_open
     store["closed"].extend(closed)
     return {"updated": updated, "closed_today": closed,
-            "newly_exposed": newly_exposed}
+            "newly_exposed": newly_exposed,
+            "newly_dividend_exposed": newly_div_exposed}

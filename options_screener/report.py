@@ -151,6 +151,33 @@ def render_paper_section(paper: dict) -> list:
                                      in alerts["channel_errors"].items())
                          + ".")
         lines.append("")
+    newly_div = paper.get("newly_dividend_exposed") or []
+    if newly_div:
+        lines.append("### Newly dividend-exposed today")
+        lines.append("")
+        for p in newly_div:
+            ex_date = (p.get("dividends") or {}).get("date")
+            lines.append(f"- **{p['ticker']}** {_position_label(p)} "
+                         f"(opened {p['opened']}): ex-dividend {ex_date} "
+                         f"now falls inside the remaining window. "
+                         f"Informational only — the stock drops by roughly "
+                         f"the dividend on the ex-date, a nudge toward the "
+                         f"short strike, not an overnight gap; the position "
+                         f"stays open and exits stay mechanical.")
+        alerts = paper.get("dividend_exposure_alerts") or {}
+        if alerts.get("fired"):
+            lines.append(f"Alert sent via {', '.join(alerts['channels'])}.")
+        elif alerts.get("would_fire"):
+            lines.append("Alert would fire (dry run — nothing sent).")
+        elif alerts.get("status") == "skipped":
+            lines.append("Alert not sent — run with --alerts to send "
+                         "dividend exposure alerts.")
+        elif alerts.get("channel_errors"):
+            lines.append("Alert attempted but the channel failed: "
+                         + "; ".join(f"{ch}: {err}" for ch, err
+                                     in alerts["channel_errors"].items())
+                         + ".")
+        lines.append("")
     if closed:
         lines.append("### Closed today")
         lines.append("")
@@ -334,7 +361,10 @@ def render_markdown(payload: dict) -> str:
         "names it and — on runs invoked with `--alerts` — the same "
         "email/webhook channels send one alert per position+earnings-date, "
         "deduped so a re-run never re-fires; a `--paper-track`-only run "
-        "records the exposure but sends nothing.",
+        "records the exposure but sends nothing. The same holds for a "
+        "position that becomes dividend-exposed at a mark (v22): one "
+        "alert per position+ex-date on the same channels, informational "
+        "only — an ex-date is a nudge, not a gap.",
     ]
     return "\n".join(lines) + "\n"
 

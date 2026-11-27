@@ -200,3 +200,9 @@ paper:
                           # runs invoked with --alerts (or --alerts-dry-run);
                           # a --paper-track-only run records the exposure in
                           # the report but sends nothing.
+  dividend_exposure_alerts: true  # v22: the dividend twin of v14 — alert
+                          # when a still-open position BECOMES
+                          # dividend-exposed at a mark; once per
+                          # position+ex-date, informational only (an
+                          # ex-date is a nudge, not a gap). Same send
+                          # rules as exposure_alerts.

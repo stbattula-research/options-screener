@@ -18,7 +18,9 @@ from datetime import date
 
 import yaml
 
-from options_screener.alerts import (exposure_alert_items, run_alerts,
+from options_screener.alerts import (dividend_exposure_alert_items,
+                                     exposure_alert_items, run_alerts,
+                                     run_dividend_exposure_alerts,
                                      run_exposure_alerts, signal_key,
                                      spread_key)
 from options_screener.data import (DataError, get_closes, get_expirations,
@@ -212,6 +214,35 @@ def run_paper_tracking(payload: dict, cfg: dict, market: dict,
             for ch, err in exposure_alerts["channel_errors"].items():
                 print(f"[paper-alert-error] {ch}: {err}", file=sys.stderr)
 
+    # v22: the dividend twin of v14 — a position that became
+    # dividend-exposed at this mark gets an alert on the same channels,
+    # once per position+ex-date, informational only (it never exits a
+    # position). Same send rules as v14: only on runs invoked with
+    # --alerts (or --alerts-dry-run); a --paper-track-only run records
+    # the exposure in the report but sends nothing.
+    newly_dividend_exposed = result["newly_dividend_exposed"]
+    dividend_exposure_alerts = None
+    if newly_dividend_exposed and pcfg.get("dividend_exposure_alerts", True):
+        if (alerts_result is None
+                or not cfg.get("alerts", {}).get("enabled", False)):
+            dividend_exposure_alerts = {
+                "status": "skipped",
+                "reason": ("dividend exposure alerts need a run with "
+                           "--alerts (alerts.enabled must be on)")}
+            print("[paper-alert] newly dividend-exposed position(s) "
+                  "recorded in the report but not sent — run with "
+                  "--alerts to send dividend exposure alerts")
+        else:
+            dividend_exposure_alerts = run_dividend_exposure_alerts(
+                dividend_exposure_alert_items(newly_dividend_exposed),
+                cfg, as_of=as_of, dry_run=dry_run)
+            for it in (dividend_exposure_alerts["fired"]
+                       or dividend_exposure_alerts["would_fire"]):
+                print(f"[paper-alert] {it['ticker']} [{it['kind']}] "
+                      f"{it['reason']}")
+            for ch, err in dividend_exposure_alerts["channel_errors"].items():
+                print(f"[paper-alert-error] {ch}: {err}", file=sys.stderr)
+
     for p in opened:
         print(f"[paper] opened {p['ticker']} {p['key'].split('|')[-1]} "
               f"({p['kind']}) @ ${p['entry_credit']:.2f}/share credit")
@@ -222,6 +253,8 @@ def run_paper_tracking(payload: dict, cfg: dict, market: dict,
             "closed_today": result["closed_today"],
             "newly_exposed": newly_exposed,
             "exposure_alerts": exposure_alerts,
+            "newly_dividend_exposed": newly_dividend_exposed,
+            "dividend_exposure_alerts": dividend_exposure_alerts,
             "state_dir": state_dir}
 
 

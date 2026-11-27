@@ -220,6 +220,55 @@ def render_exposure_subject(as_of: str, items: list) -> str:
             f"earnings-exposed ({as_of}): {', '.join(tickers)}")
 
 
+def dividend_exposure_key(pos: dict, ex_date: str) -> str:
+    """Dedupe key for a newly dividend-exposed paper position: the
+    position key plus the ex-dividend date, so a moved announcement
+    date fires once for the new date instead of re-firing (or never
+    firing) for the old one. Mirrors `exposure_key` (v14)."""
+    return f"{pos['key']}|dividends:{ex_date}"
+
+
+def dividend_exposure_alert_items(newly_dividend_exposed: list) -> list:
+    """Build alert items for positions that just became dividend-exposed.
+
+    Same shape `run_alerts` items use (kind/key/ticker/reason/detail) so
+    the shared delivery path handles them. Positions without a known
+    ex-date are skipped — there is nothing to name, and `unknown` is
+    never evidence of exposure. The alert is informational only: an
+    ex-date is a nudge toward the short strike, not an overnight gap,
+    and it never exits a position."""
+    items = []
+    for p in newly_dividend_exposed:
+        ex_date = (p.get("dividends") or {}).get("date")
+        if not ex_date:
+            continue
+        if p["kind"] == "spread":
+            label = (f"${p['short_strike']:.2f}/${p['long_strike']:.2f} "
+                     f"spread exp {p['expiry']}")
+        else:
+            label = f"${p['strike']:.2f} put exp {p['expiry']}"
+        items.append({
+            "kind": "dividend_exposure",
+            "key": dividend_exposure_key(p, ex_date),
+            "ticker": p["ticker"],
+            "reason": (f"ex-dividend {ex_date} now inside the remaining "
+                       f"window (opened {p['opened']}, "
+                       f"expires {p['expiry']})"),
+            "detail": (f"paper {label}, entry credit "
+                       f"${p['entry_credit']:.2f}/share — informational "
+                       f"only, exits stay mechanical; the stock drops by "
+                       f"roughly the dividend on the ex-date, a nudge "
+                       f"toward the short strike, not an overnight gap"),
+        })
+    return items
+
+
+def render_dividend_exposure_subject(as_of: str, items: list) -> str:
+    tickers = sorted({it["ticker"] for it in items})
+    return (f"[options-screener] {len(items)} paper position(s) newly "
+            f"dividend-exposed ({as_of}): {', '.join(tickers)}")
+
+
 def _deliver(items: list, cfg: dict, as_of: str, subject_fn,
              dry_run: bool = False) -> dict:
     """Shared delivery path: dedupe against the alert state file, send on
@@ -306,3 +355,18 @@ def run_exposure_alerts(items: list, cfg: dict, as_of: str | None = None,
     """
     as_of = as_of or date.today().isoformat()
     return _deliver(items, cfg, as_of, render_exposure_subject, dry_run)
+
+
+def run_dividend_exposure_alerts(items: list, cfg: dict,
+                                 as_of: str | None = None,
+                                 dry_run: bool = False) -> dict:
+    """Alert on paper positions that just became dividend-exposed (v22).
+
+    The dividend twin of `run_exposure_alerts` (v14): same channels,
+    dedupe state file, and return shape — only the subject line differs.
+    Fires once per position+ex-date (see `dividend_exposure_key`); a
+    re-run of the same day does not re-fire. dry_run reports what would
+    fire without sending or persisting state."""
+    as_of = as_of or date.today().isoformat()
+    return _deliver(items, cfg, as_of,
+                    render_dividend_exposure_subject, dry_run)

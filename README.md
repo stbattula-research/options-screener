@@ -523,6 +523,29 @@ the short strike and raising early-assignment odds if the put is in
 the money near the date — worth seeing on a live position, not worth
 exiting on.
 
+## Alerting on newly dividend-exposed paper positions (v22)
+
+v21 only *flagged* dividend exposure in the report — a position that
+becomes dividend-exposed after opening sat there silently until
+someone read the daily report. v22 is the dividend twin of v14: at
+each `--paper-track` mark, `update_positions` detects the flip
+(outside/unknown → inside, or inside to a *different* announced
+ex-date) and the report names the position in a "Newly
+dividend-exposed today" section — and on runs invoked with `--alerts`
+the same email/webhook channels send one alert per position+ex-date,
+deduped so a re-run never re-fires. A `--paper-track`-only run
+records the exposure but sends nothing, so a quiet daily mark never
+surprises anyone with mail; a position that closes at the same mark
+is never alerted on.
+
+The alert is informational only, and it says so in its own body: an
+ex-date nudges the underlying toward the short strike and raises
+early-assignment odds if the put is in the money near the date — a
+smaller, slower effect than an earnings gap, worth seeing on a live
+position, not worth exiting on. Exits stay mechanical. Config-gated
+by `paper.dividend_exposure_alerts` (default on), alongside v14's
+`paper.exposure_alerts` for earnings.
+
 ## Roadmap
 
 - v2: ✅ bull-put-spread signals (shipped 2026-10-10); ✅ model-based
@@ -670,6 +693,13 @@ exiting on.
   position lives 30–45 days and an ex-date can be announced after
   entry, or was unknown at entry. Informational only, exits stay
   mechanical; a position never exits early on a dividend.)
+- v22: ✅ alerting on newly dividend-exposed paper positions (shipped
+  2026-11-27: the dividend twin of v14 — a still-open position whose
+  ex-date flips to inside its remaining window at a mark is named in
+  the report and, on runs invoked with `--alerts`, alerted once per
+  position+ex-date on the same email/webhook channels, deduped so a
+  re-run never re-fires. Informational only, exits stay mechanical; a
+  `--paper-track`-only run records the exposure but sends nothing.)
 - v6: ✅ IV-regime split (shipped 2026-10-24: `python backtest.py --regimes`
   splits each ticker's backtest trades into low/high entry-IV regimes at that
   ticker's median entry IV and reports win rate, P&L, and drawdown per regime
